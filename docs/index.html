@@ -522,20 +522,78 @@
       (data.what_stands_out || []).forEach((item, index) => requireFields(item, ["icon", "text"], `graph-view what_stands_out[${index}]`));
       (data.people_involved || []).forEach((person, index) => requireFields(person, ["id", "name", "icon", "meta", "influence"], `graph-view people_involved[${index}]`));
       (data.key_moments || []).forEach((moment, index) => requireFields(moment, ["id", "icon", "title", "detail"], `graph-view key_moments[${index}]`));
-      (data.evidence || []).forEach((item, index) => requireFields(item, ["id", "icon", "label", "kind", "ref", "note"], `graph-view evidence[${index}]`));
+      (data.evidence || []).forEach((item, index) => requireFields(item, ["ref"], `graph-view evidence[${index}]`));
       (data.nodes || []).forEach((node, index) => requireFields(node, ["id", "kind", "label", "status", "icon", "why_it_matters"], `graph-view nodes[${index}]`));
       (data.edges || []).forEach((edge, index) => requireFields(edge, ["from", "to", "relation", "label"], `graph-view edges[${index}]`));
     }
 
-    function validateRawPayload(data) {
-      requireFields(data, ["session_id"], "graph-raw");
-      (data.actors || []).forEach((actor, index) => requireFields(actor, ["id", "name", "icon", "meta"], `graph-raw actors[${index}]`));
-      (data.sources || []).forEach((source, index) => requireFields(source, ["id", "kind", "label", "ref"], `graph-raw sources[${index}]`));
-      (data.events || []).forEach((event, index) => {
-        requireFields(event, ["ts", "actor_id", "op", "target", "payload"], `graph-raw events[${index}]`);
-        requireFields(event.target, ["id", "kind"], `graph-raw events[${index}].target`);
-      });
+    function domainFromRef(ref) {
+      try { return new URL(ref).hostname.replace(/^www\./, ""); } catch { return ""; }
     }
+
+    function faviconUrl(ref) {
+      const domain = domainFromRef(ref);
+      return domain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(domain)}` : "";
+    }
+
+    function autoLabelFromRef(ref) {
+      const ghBranch = ref.match(/github\.com\/([^/]+)\/([^/]+)\/(tree|blob)\/([^/?#]+)/);
+      if (ghBranch) return `${ghBranch[1]}/${ghBranch[2]} — ${ghBranch[4]}`;
+      const ghPR = ref.match(/github\.com\/([^/]+)\/([^/]+)\/(pull|issues)\/(\d+)/);
+      if (ghPR) return `${ghPR[1]}/${ghPR[2]} #${ghPR[4]}`;
+      return domainFromRef(ref) || ref;
+    }
+
+    function deriveGraphViewFromState(state) {
+      const decisions = state.decisions || [];
+      const participants = state.participants || [];
+      const openQuestions = state.open_questions || [];
+      const closed = decisions.filter((d) => d.status === "closed");
+      const lastClosed = closed[closed.length - 1] || null;
+
+      const evidenceMap = new Map();
+      decisions.forEach((d) => {
+        (d.evidence || []).forEach((e) => {
+          if (e.ref && !evidenceMap.has(e.ref)) evidenceMap.set(e.ref, e);
+        });
+      });
+
+      const nodes = decisions.map((d, i) => ({
+        id: d.id || `d-${i}`,
+        kind: d.status === "closed" ? "decision" : "question",
+        label: d.topic,
+        status: d.status === "closed" ? "agreed" : "open",
+        icon: d.status === "closed" ? "✅" : "❓",
+        why_it_matters: d.rationale || d.decision || d.topic,
+      }));
+
+      const edges = [];
+      decisions.forEach((d, i) => {
+        const src = d.id || `d-${i}`;
+        (d.linked_topics || []).forEach((tgt) => edges.push({ from: src, to: tgt, relation: "informs", label: "informs" }));
+      });
+
+      return {
+        main_question: state.current_topic || decisions[0]?.topic || "Huddle discussion",
+        decision: lastClosed?.decision || "No final decision recorded yet",
+        decision_why: lastClosed?.rationale || "Decisions are still open.",
+        what_stands_out: [
+          ...closed.slice(-3).map((d) => ({ icon: "✅", text: d.decision || d.topic })),
+          ...openQuestions.slice(0, 2).map((q) => ({ icon: "❓", text: q })),
+        ],
+        people_involved: participants.map((p) => ({
+          id: p.id, name: p.name, icon: p.icon || "👤", meta: p.meta || "",
+          influence: p.influence || "Participated in this huddle.",
+        })),
+        key_moments: (state.key_moments || []).map((m, i) => ({
+          id: m.id || `m-${i}`, icon: m.icon || "💬", title: m.title || "", detail: m.detail || "",
+        })),
+        evidence: [...evidenceMap.values()],
+        nodes,
+        edges,
+      };
+    }
+
 
     function decodeUrlSafeBase64(input) {
       const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
@@ -572,153 +630,15 @@
     }
 
     function normalizeBundle(bundle) {
-      if (bundle.view || bundle.graph_view) {
-        return {
-          markdown: bundle.markdown || "",
-          source: bundle.source || "huddle.md",
-          graphView: bundle.view || bundle.graph_view,
-        };
-      }
-      if (bundle.raw || bundle.graph_raw) {
-        const raw = bundle.raw || bundle.graph_raw;
-        validateRawPayload(raw);
-        return {
-          markdown: bundle.markdown || "",
-          source: bundle.source || "huddle.md",
-          graphView: deriveGraphViewFromRaw(raw),
-        };
-      }
-      throw new Error("Unsupported bundle shape. Expected `raw`, `graph_raw`, `view`, or `graph_view`.");
-    }
-
-    function statusFromEvent(event) {
-      return event.payload?.status || (
-        event.op === "decision_recorded" ? "agreed"
-        : event.op === "deferred" ? "deferred"
-        : event.op === "question_missing" ? "open"
-        : event.op === "rejected" ? "rejected"
-        : event.op === "challenged" ? "challenged"
-        : "active"
-      );
-    }
-
-    function iconFromStatus(status) {
-      return status === "agreed" ? "✅"
-        : status === "deferred" ? "⏸️"
-        : status === "open" ? "❓"
-        : status === "challenged" ? "⚔️"
-        : status === "rejected" ? "🛑"
-        : "💡";
-    }
-
-    function titleFromEvent(event) {
-      const payload = event.payload || {};
-      if ((event.op === "edge_added" || event.op === "edge_updated") && payload.from && payload.to) {
-        return payload.note || `${payload.relation || "linked"} ${payload.from} → ${payload.to}`;
-      }
-      return payload.label || payload.title || payload.note || event.note || event.target?.id || event.op;
-    }
-
-    function detailFromEvent(event) {
-      const payload = event.payload || {};
-      if ((event.op === "edge_added" || event.op === "edge_updated") && payload.from && payload.to) {
-        return payload.note || `${payload.from} ${payload.relation || "linked to"} ${payload.to}`;
-      }
-      return payload.note || payload.why_it_matters || event.note || `${event.op} on ${event.target?.kind || "node"}`;
-    }
-
-    function deriveGraphViewFromRaw(raw) {
-      const actors = raw.actors || [];
-      const sources = raw.sources || [];
-      const events = raw.events || [];
-      const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
-
-      const actorEventCounts = new Map();
-      const nodeMap = new Map();
-      const edgeMap = new Map();
-
-      events.forEach((event) => {
-        const status = statusFromEvent(event);
-        const payload = event.payload || {};
-        const target = event.target || {};
-        actorEventCounts.set(event.actor_id, (actorEventCounts.get(event.actor_id) || 0) + 1);
-
-        if (target.id) {
-          const existing = nodeMap.get(target.id) || {
-            id: target.id,
-            kind: target.kind || "idea",
-            label: target.id,
-            status: "active",
-            icon: "💡",
-            why_it_matters: "",
-            source_refs: [],
-          };
-          existing.kind = target.kind || existing.kind;
-          existing.label = payload.label || payload.title || existing.label;
-          existing.status = payload.status || status || existing.status;
-          existing.icon = payload.icon || iconFromStatus(existing.status);
-          existing.why_it_matters = payload.why_it_matters || payload.note || event.note || existing.why_it_matters || "Captured from the huddle flow.";
-          existing.source_refs = Array.from(new Set([...(existing.source_refs || []), ...(payload.source_refs || [])]));
-          nodeMap.set(target.id, existing);
-        }
-
-        const from = payload.from;
-        const to = payload.to;
-        if (from && to) {
-          const edgeId = `${from}::${to}::${payload.relation || event.op}`;
-          edgeMap.set(edgeId, {
-            from,
-            to,
-            relation: payload.relation || event.op,
-            label: payload.label || payload.relation || event.op,
-            source_refs: payload.source_refs || [],
-          });
-        }
-      });
-
-      const nodes = Array.from(nodeMap.values());
-      const edges = Array.from(edgeMap.values());
-      const firstQuestion = nodes.find((node) => ["problem", "question", "issue", "missing-question"].includes(node.kind)) || nodes[0];
-      const decisionNode = [...nodes].reverse().find((node) => node.kind === "decision" || node.status === "agreed");
-      const notableEvents = events.filter((event) => event.op !== "edge_added" || event.payload?.note).slice(-3);
-
+      if (!bundle.state) throw new Error("Invalid bundle: expected `state` field (huddle-state.json content).");
       return {
-        session_id: raw.session_id,
-        generated_at: new Date().toISOString(),
-        main_question: firstQuestion?.label || "Huddle discussion",
-        decision: decisionNode?.label || "No final decision recorded yet",
-        decision_why: decisionNode?.why_it_matters || "Derived on demand from raw huddle events.",
-        what_stands_out: notableEvents.map((event) => ({
-          icon: iconFromStatus(statusFromEvent(event)),
-          text: titleFromEvent(event),
-        })),
-        people_involved: actors.map((actor) => ({
-          id: actor.id,
-          name: actor.name,
-          icon: actor.icon,
-          meta: actor.meta,
-          influence: actor.influence || `Shaped ${actorEventCounts.get(actor.id) || 0} recorded changes in this huddle.`,
-        })),
-        key_moments: events.map((event, index) => ({
-          id: event.id || `m-${index}`,
-          icon: iconFromStatus(statusFromEvent(event)),
-          title: titleFromEvent(event),
-          detail: detailFromEvent(event),
-          ts: event.ts,
-          actor_id: event.actor_id,
-        })),
-        evidence: sources.map((source) => ({
-          id: source.id,
-          icon: source.icon || (source.kind === "github" || source.kind === "web" ? "🔗" : source.kind === "repo" ? "🧩" : source.kind === "local" ? "📚" : "🗣️"),
-          label: source.label,
-          kind: source.kind,
-          ref: source.ref,
-          note: source.note || "Attached from raw huddle evidence.",
-        })),
-        nodes,
-        edges,
+        markdown: bundle.markdown || "",
+        source: bundle.source || "huddle.md",
+        graphView: deriveGraphViewFromState(bundle.state),
       };
     }
+
+
 
     function renderSummary(view) {
       document.getElementById("main-question").textContent = view.main_question;
@@ -747,13 +667,20 @@
     }
 
     function renderSources(view) {
-      document.getElementById("sources").innerHTML = (view.evidence || []).map((source) => `
-        <div class="list-card">
-          <strong>${escapeHtml(source.icon)} ${escapeHtml(source.label)}</strong>
-          <small>${escapeHtml(source.kind)} · <a href="${escapeHtml(source.ref)}" target="_blank" rel="noreferrer">${escapeHtml(source.ref)}</a></small>
-          <small>${escapeHtml(source.note)}</small>
-        </div>
-      `).join("");
+      document.getElementById("sources").innerHTML = (view.evidence || []).map((source) => {
+        const ref = source.ref || "";
+        const label = source.label || autoLabelFromRef(ref) || ref;
+        const favicon = faviconUrl(ref);
+        const iconHtml = favicon
+          ? `<img src="${escapeHtml(favicon)}" width="16" height="16" style="vertical-align:middle;border-radius:3px;margin-right:4px" alt="" onerror="this.replaceWith('🔗')">`
+          : "🔗 ";
+        return `
+          <div class="list-card">
+            <strong>${iconHtml}<a href="${escapeHtml(ref)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a></strong>
+            ${source.note ? `<small>${escapeHtml(source.note)}</small>` : ""}
+          </div>
+        `;
+      }).join("");
     }
 
     const kindShape = {

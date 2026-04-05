@@ -44,7 +44,11 @@ Cross-branch reads: when loading context, scan **all** sibling branch folders un
 4. Read `references/steps/step-02-discussion.md` — run multi-perspective discussion loop, user drives.
 5. When user wraps up, read `references/steps/step-03-smart-exit.md` — summarize, persist, give resume hint.
 
+Persona metadata source:
+- `references/persona-roster.xml` is the lightweight roster and file lookup source
+- persona markdown files remain the source for full persona behavior and voice
+
 Graph review behavior:
-- persist only `graph-raw.json`
-- derive the readable graph transiently when review is requested
-- bundle markdown plus raw graph into the hosted review viewer
+- state lives in `huddle-state.json` only — no `graph-raw.json`
+- when a graph view is needed, Elango generates `graph-view.json` from conversation + `huddle-state.json`
+- run `python3 scripts/md_to_html.py {note_path} {graph_view_path}` to bundle and open the review URL

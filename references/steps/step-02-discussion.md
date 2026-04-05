@@ -24,50 +24,38 @@ This step runs as a loop — once per message from `{GIT_USER}`.
 
   <elango-rules>
     <rule>Elango runs as a mandatory background state worker after each meaningful round.</rule>
-    <rule>Elango silently tracks decisions, rationale, rejected paths, action items, links between topics, raw graph changes, and source/evidence references.</rule>
-    <rule>Elango must append structural updates to graph-raw.json after every meaningful round, even when no visible review is requested.</rule>
-    <rule>Elango must keep graph-raw.json structural and derive a readable graph view only for human review. The HTML renderer should only display that derived view, not invent it.</rule>
+    <rule>Elango silently reads huddle-state.json first, then updates it with decisions, rationale, rejected paths, action items, participants, key moments, and open questions.</rule>
+
     <rule>If a decision reaches closure, Elango may briefly offer review: "We've decided this. Want to have a look?"</rule>
-    <rule>If {GIT_USER} asks where things stand, search across repo work state, current branch memory, and relevant sibling-branch summaries before rendering the current huddle Markdown to HTML and opening it in the browser.</rule>
+    <rule>If {GIT_USER} asks where things stand or wants to see the graph, ensure huddle-state.json is current, then run: python3 scripts/md_to_html.py {note_path} — index.html derives the graph from decisions[] client-side.</rule>
     <rule>When producing notes, summary, spec, or graph views, Elango may include Mermaid decision flow when it adds signal.</rule>
-    <rule>Elango's background pass should be internally structured with clear tagged sections such as discussion delta, raw graph update, graph-view projection, and Markdown projection.</rule>
-    <rule>Do not regenerate the readable graph view on ordinary turns; do it only for status review, explicit graph review, decision check-in, or wrap-up review.</rule>
+    <rule>Generate the graph view only when a visual review is needed — not on every turn.</rule>
   </elango-rules>
 
   <state-rules>
     <rule>Update today's huddle note and huddle-state.json after each meaningful exchange.</rule>
-    <rule>Also update graph-raw.json after each meaningful exchange.</rule>
-    <rule>Refresh the readable graph view only when a checkpoint or review is needed.</rule>
-    <rule>Carry forward active_personas, latest_summary, open_questions, action_items, and current_topic.</rule>
-    <rule>When a decision is recorded, preserve which perspectives informed it.</rule>
+    <rule>huddle-state.json is the only state file. No graph-raw.json.</rule>
+    <rule>Carry forward active_personas, latest_summary, open_questions, action_items, current_topic, decisions[], participants[], and key_moments[].</rule>
+    <rule>When a decision is recorded, preserve which perspectives informed it in decisions[].personas_involved.</rule>
+    <rule>Generate graph-view.json only when a visual review is needed — not on every turn.</rule>
   </state-rules>
 </step-policy>
 
 ## Persona Roster
 
-Perspectives available:
+The lightweight roster lives in:
 
-| Icon | Name | Domain |
-|---|---|---|
-| 🧠 | Maya (Strategy) | Big-picture, prioritization, sequencing |
-| 🖥️ | Luca (Frontend) | UI implementation, client state, browser behavior, perceived performance |
-| ⚙️ | Shaama (Backend) | APIs, data/services, backend tradeoffs, failure modes |
-| 🎨 | Suna (Design) | UX, user jobs, interaction flows |
-| 📋 | Prabagar (PM) | Outcomes, requirements, success criteria |
-| 🔒 | Senthil (Security) | Trust boundaries, threat modeling, auth |
-| 🎯 | Babu (Demand Reality) | Real vs. hypothetical, specificity, user behavior |
-| 🚀 | Dileep (Founder Visionary) | Category advantage, leverage, distribution, founder-speed pressure |
-| 🧪 | Nina (Tester) | Edge cases, failure paths, testability, rollback |
-| 🏛️ | Suren (Architect) | System design, scalability, technology selection |
-| 🔍 | Vidya (Analyst) | Analysis, requirements, competitive context |
-| 📝 | Deepak (Tech Writer) | Documentation, clarity, audience awareness |
-| ⚡ | Srey (Solo Dev) | Prioritization, scope cutting, rapid execution |
-| 🏗️ | Deva (Test Architect) | Test strategy, test pyramid, quality gates, CI/CD testing |
-| 📊 | Wei (Data Analyst) | Metrics, experiments, dashboards, quantitative evidence |
-| 🎤 | Sofia (Presentation Specialist) | Deck flow, audience adaptation, executive briefing, live delivery |
-| 📚 | Kishore (Storyteller) | Narrative arc, framing, hooks, memorable synthesis |
-| 🫧 | Amara (Trend Researcher) | Latest happenings, source-backed trend research, ecosystem signals |
-| 📐 | Elango (Spec Architect) | **Silent** — background state worker, maintains Markdown + raw graph and derives graph review on demand |
+`{skill-root}/references/persona-roster.xml`
+
+Use that file as the roster source of truth for:
+- icon
+- display name
+- title
+- domains
+- persona file reference
+- whether the persona is silent/background-only
+
+Do not maintain a second inline roster table here.
 
 ## Step 1: Analyze the Topic
 
@@ -216,9 +204,9 @@ When `{GIT_USER}` makes a call:
 - Note any open questions or follow-up actions
 - If the decision clearly reached closure, Elango may surface briefly with:
   `We've decided this. Want to have a look?`
-- If `{GIT_USER}` wants to review the current state, use the current huddle Markdown as the source of truth and render it with:
-  `python3 scripts/md_to_html.py file.md`
-- Open the review URL in the browser when the user asks where things stand or wants to inspect the notes visually
+- If `{GIT_USER}` wants to review the current state: Elango generates the graph view JSON, writes to `/tmp/huddle-graph-view.json`, runs:
+  `python3 scripts/md_to_html.py {note_path} /tmp/huddle-graph-view.json`
+- Open the review URL in the browser
 
 Update `huddle-state.json` with:
 - `last_huddle_date`
@@ -234,53 +222,33 @@ Then ask: **"What's next, {GIT_USER}?"**
 
 **Elango runs silently throughout the huddle as an underlying background pass.** He is NOT selected in persona rounds.
 
-After every discussion round (Steps 4-7), internally track:
-- Topic discussed
-- Which personas spoke and their key points
-- Core tension surfaced
-- Decision made (if any) and by whom
-- Open questions
-- Action items
-- Decision rationale and rejected alternatives when they were explicit
-- Links between this topic and earlier topics so Elango can reconstruct the flow later
-- Raw graph changes
-- Evidence and source references that grounded the room
+After every discussion round (Steps 4-7):
 
-Required JSON semantics:
-- `graph-raw.json` events must include `ts`, `actor_id`, `op`, `target`, and `payload`
-- `graph-raw.json` actors must include `id`, `name`, `icon`, and `meta`
-- `graph-raw.json` sources must include `id`, `kind`, `label`, and `ref`
-- the derived readable graph must include `people_involved` with `id`, `name`, `icon`, `meta`, and `influence`
-- the derived readable graph must include `nodes` with `id`, `kind`, `label`, `status`, `icon`, and `why_it_matters`
-- the derived readable graph must include `edges` with `from`, `to`, `relation`, and `label`
+1. **Read** `huddle-state.json` — always read before writing
+2. **Read** conversation history since last checkpoint
+3. **Update** the following fields:
+   - `current_topic`
+   - `latest_summary`
+   - `open_questions[]`
+   - `action_items[]`
+   - `active_personas[]`
+   - `decisions[]` — add or update entries; mark closed decisions with `status: "closed"`
+   - `participants[]` — add any persona that spoke this round
+   - `key_moments[]` — add one entry per meaningful turn (decision made, tension surfaced, path rejected)
+4. **Write** the updated `huddle-state.json` back
+5. **Update** today's huddle note (`{YYYY-MM-DD}.md`) with the same information in Markdown
 
-This tracking is invisible to `{GIT_USER}` — no output, no interruptions.
+This is invisible to `{GIT_USER}` — no output, no interruptions.
 
-Raw append behavior is always-on.
-
-Graph-view projection is request-driven:
-- status / "where do we stand?"
-- "show me the graph" / "open the huddle" / visual review
+The graph view JSON is generated only on demand:
+- "where do we stand?" / "show me the graph" / "open the huddle"
 - decision check-in after closure
 - wrap-up review when asked
 
-Run the internal pass in a structured way. Prefer sections like:
-
-```xml
-<background_pass>
-  <discussion_delta>What changed in this round</discussion_delta>
-  <raw_graph_update>New nodes, edges, source refs, reversals, rejected paths</raw_graph_update>
-  <graph_view_projection>What a human should see if they inspect the graph now</graph_view_projection>
-  <markdown_projection>Human-readable note/spec changes</markdown_projection>
-  <visibility>Do not expose this pass unless the user asks for artifacts</visibility>
-</background_pass>
-```
-
-Rules:
-- this pass is internal only
-- do not print the pass to `{GIT_USER}`
-- update files/artifacts, then return only visible persona output
-- keep raw capture stable and derive human-readable graph views later
+When the graph view is needed:
+1. Ensure `huddle-state.json` is fully up to date (decisions, evidence, participants, key_moments)
+2. Run: `python3 scripts/md_to_html.py {note_path}`
+3. `index.html` derives nodes, edges, and evidence from `decisions[]` client-side
 
 ## Step 9: Elango — Output on Demand
 
@@ -309,9 +277,9 @@ If `{GIT_USER}` asks:
 Then Elango should:
 
 1. identify the current huddle Markdown file
-2. run `python3 scripts/md_to_html.py file.md`
-3. open the generated review URL in the browser
-4. treat that rendered document as the review surface for the current state
+2. ensure `huddle-state.json` is current
+3. run `python3 scripts/md_to_html.py {note_path}`
+4. open the generated review URL in the browser
 
 ## Meeting Document Shape
 

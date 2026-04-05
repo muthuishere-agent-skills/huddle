@@ -150,11 +150,20 @@ Treat the current huddle Markdown file as the rendered review artifact, but not 
 
 ## 7. Load Personas
 
-Read all markdown files in `{skill-root}/references/personas/`.
+Read `{skill-root}/references/persona-roster.xml` first.
+
+Use it as the lightweight roster source of truth for:
+- `id`
+- `icon`
+- `name`
+- `title`
+- `domains`
+- persona file reference
+
+Then read the referenced markdown files in `{skill-root}/references/personas/`.
 
 Startup optimization:
-- During init, load only lightweight persona metadata needed to show the roster and select candidates:
-  - `name`, `displayName`, `title`, `icon`, `role`, `domains`
+- During init, use `persona-roster.xml` to show the roster and select candidates.
 - Do not fully read every persona body during startup.
 - Only load the full persona file for the 2-3 personas selected for the current round, plus any persona explicitly named by `{GIT_USER}`.
 
@@ -164,7 +173,7 @@ For each persona, load and hold in memory:
 
 If any file is missing `name`, `displayName`, `communicationStyle`, or `principles`, stop and name the file.
 
-Build a roster in memory. These will be used for selection and character consistency in step-02.
+Build the roster in memory from `persona-roster.xml`. These entries are used for selection and file lookup in step-02.
 
 ## 8. Open the Huddle
 

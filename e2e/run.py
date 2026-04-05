@@ -32,6 +32,143 @@ def decode_hash(url: str) -> dict:
     return json.loads(gzip.decompress(raw).decode("utf-8"))
 
 
+SAMPLE_STATE = {
+    "reponame": "huddle",
+    "branch": "main",
+    "last_huddle_date": "2026-04-05",
+    "current_topic": "Should we simplify Elango's state model?",
+    "open_questions": ["How does LLM generate graph view reliably?"],
+    "action_items": ["Update elango-specwriter.md"],
+    "latest_summary": "Decided to drop graph-raw.json in favour of huddle-state.json",
+    "active_personas": ["suren", "babu"],
+    "decisions": [
+        {
+            "id": "d-1",
+            "topic": "Simplify Elango state model",
+            "status": "closed",
+            "decision": "Drop graph-raw.json, derive graph from huddle-state.json",
+            "rationale": "Simpler state means Elango reliably captures decisions every round",
+            "rejected_paths": ["Keep graph-raw.json as always-on"],
+            "personas_involved": [
+                {"id": "suren", "name": "Suren", "icon": "🏛️", "meta": "Architect"},
+                {"id": "babu", "name": "Babu", "icon": "🎯", "meta": "Demand Reality"},
+            ],
+            "linked_topics": ["d-2"],
+            "evidence": [
+                {
+                    "ref": "https://github.com/m-agentic-skills/huddle/tree/main",
+                    "label": "",
+                    "note": "Source branch for this discussion",
+                }
+            ],
+        },
+        {
+            "id": "d-2",
+            "topic": "Evidence tracking",
+            "status": "open",
+            "decision": "",
+            "rationale": "",
+            "rejected_paths": [],
+            "personas_involved": [],
+            "linked_topics": [],
+            "evidence": [
+                {
+                    "ref": "https://github.com/m-agentic-skills/huddle/issues/12",
+                    "label": "",
+                    "note": "Related issue on evidence schema",
+                }
+            ],
+        },
+    ],
+    "participants": [
+        {"id": "suren", "name": "Suren", "icon": "🏛️", "meta": "Architect", "influence": "Proposed read-before-write rule"},
+        {"id": "babu", "name": "Babu", "icon": "🎯", "meta": "Demand Reality", "influence": "Flagged event schema complexity"},
+    ],
+    "key_moments": [
+        {"id": "m-1", "icon": "💬", "title": "graph-raw.json complexity raised", "detail": "Event schema too rigid for LLM"},
+        {"id": "m-2", "icon": "✅", "title": "Decision: derive graph from huddle-state.json", "detail": "index.html handles derivation client-side"},
+    ],
+}
+
+
+def test_meeting_state_ensure(env: dict) -> None:
+    out = run(
+        ["python3", "scripts/meeting_state.py", "ensure", "sample-repo", "main", "2026-04-05"],
+        cwd=ROOT,
+        env=env,
+    )
+    result = json.loads(out)
+
+    assert "huddle_state_file" in result, "missing huddle_state_file"
+    assert "huddle_note_file" in result, "missing huddle_note_file"
+    assert "graph_raw_file" not in result, "graph_raw_file should not appear"
+
+    state = json.loads(Path(result["huddle_state_file"]).read_text())
+    assert state["decisions"] == [], "decisions should start empty"
+    assert state["participants"] == [], "participants should start empty"
+    assert state["key_moments"] == [], "key_moments should start empty"
+
+    assert not (Path(result["huddle_state_file"]).parent / "graph-raw.json").exists(), \
+        "graph-raw.json should not be created"
+
+    print("  [ok] meeting_state ensure — schema correct, no graph-raw.json")
+
+
+def test_md_to_html(sample: Path) -> None:
+    note = sample / "2026-04-05.md"
+    note.write_text("# Huddle\n\n## Topics Discussed\n\nElango state simplification.\n", encoding="utf-8")
+
+    state_path = sample / "huddle-state.json"
+    state_path.write_text(json.dumps(SAMPLE_STATE, ensure_ascii=False), encoding="utf-8")
+
+    url = run(
+        [
+            "python3", "scripts/md_to_html.py", str(note),
+            "https://m-agentic-skills.github.io/huddle/index.html",
+        ],
+        cwd=ROOT,
+    )
+
+    assert "#" in url, "URL missing hash fragment"
+
+    bundle = decode_hash(url)
+    assert bundle["source"] == "2026-04-05.md", f"wrong source: {bundle['source']}"
+    assert "markdown" in bundle, "bundle missing markdown"
+    assert "state" in bundle, "bundle missing state"
+    assert "view" not in bundle, "bundle should not contain pre-derived view"
+    assert "raw" not in bundle, "bundle should not contain raw"
+
+    state = bundle["state"]
+    assert len(state["decisions"]) == 2, f"expected 2 decisions, got {len(state['decisions'])}"
+    assert state["decisions"][0]["id"] == "d-1"
+    assert state["decisions"][0]["status"] == "closed"
+    assert state["decisions"][1]["id"] == "d-2"
+    assert state["decisions"][1]["status"] == "open"
+
+    d1_evidence = state["decisions"][0]["evidence"]
+    assert len(d1_evidence) == 1, f"expected 1 evidence on d-1, got {len(d1_evidence)}"
+    assert "github.com" in d1_evidence[0]["ref"], "d-1 evidence ref wrong"
+
+    d2_evidence = state["decisions"][1]["evidence"]
+    assert len(d2_evidence) == 1, f"expected 1 evidence on d-2, got {len(d2_evidence)}"
+    assert "issues/12" in d2_evidence[0]["ref"], "d-2 evidence ref wrong"
+
+    assert len(state["participants"]) == 2
+    assert state["participants"][0]["id"] == "suren"
+    assert state["participants"][1]["id"] == "babu"
+
+    assert len(state["key_moments"]) == 2
+    assert state["key_moments"][0]["id"] == "m-1"
+    assert state["key_moments"][1]["id"] == "m-2"
+
+    print("  [ok] md_to_html — state bundle correct, evidence in decisions, no raw/view")
+
+
+def test_graph_state_py_removed() -> None:
+    assert not (ROOT / "scripts" / "graph_state.py").exists(), "graph_state.py still exists"
+    print("  [ok] graph_state.py removed")
+
+
 def main() -> int:
     tmp_root = Path(tempfile.mkdtemp(prefix="huddle-e2e-"))
     home = tmp_root / "home"
@@ -39,116 +176,18 @@ def main() -> int:
     home.mkdir(parents=True, exist_ok=True)
     sample.mkdir(parents=True, exist_ok=True)
 
+    env = {"HOME": str(home)}
+
     try:
-        note = sample / "2026-04-05.md"
-        note.write_text("# Huddle\n\nE2E raw-only viewer test.\n", encoding="utf-8")
-
-        raw = {
-            "session_id": "2026-04-05-main",
-            "actors": [
-                {"id": "user", "name": "Muthukumaran", "icon": "🎼", "meta": "You"},
-                {"id": "elango", "name": "Elango", "icon": "📐", "meta": "Background State Worker"},
-            ],
-            "sources": [
-                {
-                    "id": "src1",
-                    "kind": "github",
-                    "label": "Hosted viewer",
-                    "ref": "https://m-agentic-skills.github.io/huddle/index.html",
-                }
-            ],
-            "events": [
-                {
-                    "ts": "2026-04-05T10:00:00Z",
-                    "actor_id": "user",
-                    "op": "node_added",
-                    "target": {"id": "n1", "kind": "issue"},
-                    "payload": {
-                        "label": "Viewer should derive graph from raw on request",
-                        "status": "active",
-                        "source_refs": ["src1"],
-                        "note": "This is the central viewer requirement.",
-                    },
-                },
-                {
-                    "ts": "2026-04-05T10:05:00Z",
-                    "actor_id": "user",
-                    "op": "decision_recorded",
-                    "target": {"id": "n2", "kind": "decision"},
-                    "payload": {
-                        "label": "Persist only graph-raw.json",
-                        "status": "agreed",
-                        "source_refs": ["src1"],
-                        "note": "Readable graph is derived only at review time.",
-                    },
-                },
-                {
-                    "ts": "2026-04-05T10:06:00Z",
-                    "actor_id": "elango",
-                    "op": "edge_added",
-                    "target": {"id": "e1", "kind": "relation"},
-                    "payload": {
-                        "from": "n1",
-                        "to": "n2",
-                        "relation": "led_to",
-                        "label": "led to",
-                        "source_refs": ["src1"],
-                    },
-                },
-            ],
-        }
-        (sample / "graph-raw.json").write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        env = {"HOME": str(home)}
-
-        ensure_out = run(
-            ["python3", "scripts/meeting_state.py", "ensure", "sample-repo", "main", "2026-04-05"],
-            cwd=ROOT,
-            env=env,
-        )
-        ensure_json = json.loads(ensure_out)
-        assert ensure_json["graph_raw_file"].endswith("graph-raw.json")
-
-        append_out = run(
-            [
-                "python3",
-                "scripts/graph_state.py",
-                "append-raw",
-                "sample-repo",
-                "main",
-                json.dumps(
-                    {
-                        "ts": "2026-04-05T11:00:00Z",
-                        "actor_id": "user",
-                        "op": "question_missing",
-                        "target": {"id": "n3", "kind": "missing-question"},
-                        "payload": {"label": "What should the raw schema capture?", "status": "open"},
-                    }
-                ),
-            ],
-            cwd=ROOT,
-            env=env,
-        )
-        append_json = json.loads(append_out)
-        assert append_json["events_count"] >= 1
-
-        url = run(
-            [
-                "python3",
-                "scripts/md_to_html.py",
-                str(note),
-                "https://m-agentic-skills.github.io/huddle/index.html",
-            ],
-            cwd=ROOT,
-        )
-        bundle = decode_hash(url)
-        assert bundle["source"] == "2026-04-05.md"
-        assert "markdown" in bundle
-        assert "raw" in bundle
-        assert bundle["raw"]["session_id"] == "2026-04-05-main"
-
-        print("e2e ok")
+        print("Running e2e tests...")
+        test_meeting_state_ensure(env)
+        test_md_to_html(sample)
+        test_graph_state_py_removed()
+        print("\ne2e ok")
         return 0
+    except AssertionError as exc:
+        print(f"\nFAIL: {exc}", file=sys.stderr)
+        return 1
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
 

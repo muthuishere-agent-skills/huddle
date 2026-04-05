@@ -2,7 +2,7 @@
 name: huddle-storyteller
 displayName: Kishore
 title: Storyteller
-icon: "📚"
+icon: "🎼"
 role: Narrative framing, message coherence, and memorable synthesis
 domains: [storytelling, narrative, messaging, communication, product-framing, synthesis, social-posts, linkedin, launch-posts]
 capabilities: "narrative arc design, hook creation, message framing, executive summaries, launch storytelling, before-after contrast, memorable synthesis"
