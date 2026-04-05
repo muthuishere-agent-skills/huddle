@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Huddle Review Surface</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -539,6 +540,17 @@
         <div id="room-people" class="participants"></div>
       </section>
 
+      <section class="room">
+        <div class="section-head">
+          <div>
+            <h2>Evidence</h2>
+            <p>Repo references, local files, web links, or user context that grounded the room.</p>
+          </div>
+          <span class="pill">Grounding</span>
+        </div>
+        <div id="sources" class="list"></div>
+      </section>
+
       <nav class="tabs" aria-label="Huddle views">
         <button class="tab active" data-view="spec-view">Spec</button>
         <button class="tab" data-view="history-view">How the conversation evolved</button>
@@ -567,7 +579,7 @@
             </div>
             <span id="history-badge" class="pill">Conversation flow</span>
           </div>
-          <div id="history-empty" class="empty" style="display:none;">No history graph is available in this bundle yet.</div>
+          <div id="history-empty" class="empty" style="display:none;">No conversation graph is available in this bundle yet.</div>
           <div id="history-content" class="story">
             <div id="history-feed" class="feed"></div>
             <div class="history-stage">
@@ -605,7 +617,7 @@
             </div>
             <span class="pill">Latest shared state</span>
           </div>
-          <div id="current-empty" class="empty" style="display:none;">No current-state graph is available in this bundle yet.</div>
+          <div id="current-empty" class="empty" style="display:none;">No readable standing view could be derived from this graph bundle yet.</div>
           <div id="current-content">
             <div id="current-summary" class="state-summary"></div>
             <div id="current-map" class="state-board"></div>
@@ -622,19 +634,112 @@
       if (missing.length) throw new Error(`${context} missing required fields: ${missing.join(', ')}`);
     }
 
-    function validateHistoryPayload(data) {
-      (data.events || []).forEach((event, index) => {
-        requireFields(event, ['status', 'display_tag', 'display_class', 'display_title', 'display_detail'], `graph-history events[${index}]`);
-        if (event.actor) requireFields(event.actor, ['name', 'icon', 'meta'], `graph-history events[${index}].actor`);
-        if (event.node) requireFields(event.node, ['id', 'type', 'label', 'status', 'icon'], `graph-history events[${index}].node`);
-        if (event.edge) requireFields(event.edge, ['from', 'to', 'type', 'status', 'icon', 'label'], `graph-history events[${index}].edge`);
-      });
+    function validateGraphViewPayload(data) {
+      requireFields(data, ['main_question', 'decision', 'decision_why'], 'graph-view');
+      safeArray(data.what_stands_out).forEach((item, index) => requireFields(item, ['icon', 'text'], `graph-view what_stands_out[${index}]`));
+      safeArray(data.people_involved).forEach((person, index) => requireFields(person, ['id', 'name', 'icon', 'meta', 'influence'], `graph-view people_involved[${index}]`));
+      safeArray(data.key_moments).forEach((moment, index) => requireFields(moment, ['id', 'icon', 'title', 'detail'], `graph-view key_moments[${index}]`));
+      safeArray(data.evidence).forEach((item, index) => requireFields(item, ['id', 'icon', 'label', 'kind', 'ref', 'note'], `graph-view evidence[${index}]`));
+      safeArray(data.nodes).forEach((node, index) => requireFields(node, ['id', 'kind', 'label', 'status', 'icon', 'why_it_matters'], `graph-view nodes[${index}]`));
+      safeArray(data.edges).forEach((edge, index) => requireFields(edge, ['from', 'to', 'relation', 'label'], `graph-view edges[${index}]`));
     }
 
-    function validateCurrentPayload(data) {
-      (data.participants || []).forEach((person, index) => requireFields(person, ['name', 'icon', 'meta'], `graph-current participants[${index}]`));
-      (data.nodes || []).forEach((node, index) => requireFields(node, ['id', 'type', 'label', 'status', 'icon', 'display_tag', 'display_detail'], `graph-current nodes[${index}]`));
-      (data.edges || []).forEach((edge, index) => requireFields(edge, ['from', 'to', 'type', 'status', 'icon', 'label'], `graph-current edges[${index}]`));
+    function titleCase(value) {
+      return String(value || '')
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    }
+
+    function kindToStatus(kind) {
+      const map = {
+        agreed: 'agreed',
+        deferred: 'deferred',
+        challenged: 'challenged',
+        'missed-question': 'open',
+        unresolved: 'open',
+        rejected: 'challenged',
+        linked: 'active',
+        raised: 'active',
+      };
+      return map[kind] || 'active';
+    }
+
+    function statusIcon(status) {
+      const map = {
+        agreed: '✅',
+        deferred: '⏸️',
+        open: '❓',
+        challenged: '⚔️',
+        active: '💡',
+      };
+      return map[status] || '📝';
+    }
+
+    function normalizeGraphViewBundle(bundle) {
+      if (bundle.view || bundle.graph_view) {
+        return {
+          markdown: bundle.markdown,
+          source: bundle.source,
+          graphView: bundle.view || bundle.graph_view,
+        };
+      }
+
+      const history = bundle.history || {};
+      const current = bundle.current || {};
+      const agreedNode = safeArray(current.nodes).find((node) => node.status === 'agreed');
+      const firstEvent = safeArray(history.events)[0];
+      const graphView = {
+        session_id: history.session_id || current.session_id || '',
+        generated_at: current.updated_at || history.generated_at || '',
+        main_question: firstEvent?.display_title || 'Huddle discussion',
+        decision: agreedNode?.label || 'Legacy huddle bundle adapted into graph view',
+        decision_why: agreedNode?.display_detail || firstEvent?.display_detail || 'This view was derived from older history/current artifacts.',
+        what_stands_out: [
+          ...(safeArray(history.events).slice(0, 2).map((event) => ({
+            icon: statusIcon(event.status || 'active'),
+            text: event.display_title,
+          }))),
+          ...(agreedNode ? [{ icon: '✅', text: agreedNode.label }] : []),
+        ],
+        people_involved: safeArray(current.participants).map((person, index) => ({
+          id: person.id || `p-${index}`,
+          name: person.name,
+          icon: person.icon,
+          meta: person.meta,
+          influence: person.influence || person.meta,
+        })),
+        key_moments: safeArray(history.events).map((event, index) => ({
+          id: event.id || `m-${index}`,
+          icon: event.actor?.icon || event.node?.icon || statusIcon(event.status),
+          title: event.display_title,
+          detail: event.display_detail,
+          ts: event.ts || '',
+          actor_id: event.actor?.id || '',
+          kind: event.display_class || event.status || 'active',
+          status: event.status || 'active',
+        })),
+        evidence: [],
+        nodes: safeArray(current.nodes).map((node) => ({
+          id: node.id,
+          kind: node.type,
+          label: node.label,
+          status: node.status,
+          icon: node.icon,
+          why_it_matters: node.display_detail,
+          source_refs: [],
+        })),
+        edges: safeArray(current.edges).map((edge) => ({
+          from: edge.from,
+          to: edge.to,
+          relation: edge.type || edge.label,
+          label: edge.label,
+          status: edge.status || 'active',
+          source_refs: [],
+        })),
+      };
+      return { markdown: bundle.markdown, source: bundle.source, graphView };
     }
 
     function decodeUrlSafeBase64(input) {
@@ -707,24 +812,37 @@
     function nodeCardHtml(node) {
       return `
         <div class="node-card">
-          ${tagHtml(node.status, node.display_tag)}
+          ${tagHtml(node.status, `${escapeHtml(node.icon)} ${escapeHtml(titleCase(node.kind || node.status))}`)}
           <h4 class="title">${escapeHtml(node.label)}</h4>
-          <p class="detail">${escapeHtml(node.display_detail)}</p>
+          <p class="detail">${escapeHtml(node.why_it_matters || '')}</p>
         </div>
       `;
     }
 
     function connectorCardHtml(edge) {
+      const edgeStatus = edge.status || 'active';
+      const edgeIcon = edge.icon || statusIcon(edgeStatus);
       return `
         <div class="connector-card">
-          ${tagHtml(edge.status, `${edge.icon} ${edge.label}`)}
+          ${tagHtml(edgeStatus, `${edgeIcon} ${edge.label}`)}
           <p class="detail">
             <strong>${escapeHtml(edge.from)}</strong>
-            ${escapeHtml(edge.label.toLowerCase())}
+            ${escapeHtml((edge.label || edge.relation || '').toLowerCase())}
             <strong>${escapeHtml(edge.to)}</strong>
           </p>
         </div>
       `;
+    }
+
+    function renderEvidence(items) {
+      const sources = document.getElementById('sources');
+      sources.innerHTML = safeArray(items).map((item) => `
+        <div class="list-card">
+          <strong>${escapeHtml(item.icon)} ${escapeHtml(item.label)}</strong>
+          <small>${escapeHtml(item.kind)} · ${escapeHtml(item.ref)}</small>
+          <small>${escapeHtml(item.note)}</small>
+        </div>
+      `).join('');
     }
 
     function statusColor(status) {
@@ -742,244 +860,90 @@
     function nodeTypeSymbol(type) {
       const map = {
         person: 'circle',
-        problem: 'roundRect',
-        context: 'roundRect',
+        issue: 'roundRect',
+        idea: 'roundRect',
         option: 'roundRect',
-        argument: 'diamond',
-        tension: 'diamond',
+        challenge: 'diamond',
         decision: 'diamond',
-        question: 'roundRect',
-        action: 'roundRect',
-        result: 'roundRect',
-        event: 'roundRect',
+        'missing-question': 'roundRect',
+        deferred: 'roundRect',
+        rejected: 'roundRect',
+        unresolved: 'roundRect',
+        evidence: 'roundRect',
       };
       return map[type] || 'roundRect';
     }
 
-    function buildHistoryGraph(events, step, width, height) {
-      const activeEvents = events.slice(0, step + 1);
+    function buildHistoryGraph(view) {
       const nodes = [];
       const links = [];
-      const seen = new Set();
-      const topicIds = new Set();
-      const actorOrder = [];
-      const actorSeen = new Set();
-      const safeWidth = Math.max(width || 760, 760);
-      const safeHeight = Math.max(height || 560, 560);
-      const actorY = 78;
-      const eventStartY = 205;
-      const eventGap = Math.max(150, Math.min(210, Math.floor((safeWidth - 140) / Math.max(activeEvents.length, 2))));
-      const eventLeft = 120;
-
-      activeEvents.forEach((event) => {
-        if (event.actor && !actorSeen.has(event.actor.name)) {
-          actorSeen.add(event.actor.name);
-          actorOrder.push(event.actor);
-        }
+      safeArray(view.people_involved).forEach((person) => {
+        nodes.push({
+          id: `person:${person.id}`,
+          name: `${person.icon} ${person.name}`,
+          value: person.influence,
+          symbol: 'circle',
+          symbolSize: 54,
+          category: 0,
+          itemStyle: {
+            color: '#ffffff',
+            borderColor: '#94a3b8',
+            borderWidth: 2,
+          },
+          label: { show: true, color: '#0f172a', fontSize: 12, fontWeight: 700 },
+        });
       });
-
-      function pushNode(node) {
-        if (!node || seen.has(node.id)) return;
-        seen.add(node.id);
-        const isPerson = node.type === 'person';
-        const color = statusColor(node.status);
+      safeArray(view.nodes).forEach((node) => {
         nodes.push({
           id: node.id,
-          name: node.label,
-          value: node.detail || '',
-          symbol: nodeTypeSymbol(node.type),
-          x: node.x,
-          y: node.y,
-          symbolSize: node.symbolSize || (isPerson ? 56 : node.type === 'event' ? [176, 54] : (node.type === 'decision' ? 74 : node.type === 'tension' ? 62 : 70)),
-          draggable: false,
+          name: `${node.icon} ${node.label}`,
+          value: node.why_it_matters,
+          symbol: nodeTypeSymbol(node.kind),
+          symbolSize: node.kind === 'decision' ? 72 : 64,
+          category: 1,
           itemStyle: {
-            color: isPerson ? '#ffffff' : `${color}22`,
-            borderColor: color,
-            borderWidth: isPerson ? 2.5 : 2,
-            shadowBlur: 18,
-            shadowColor: `${color}22`,
+            color: '#ffffff',
+            borderColor: '#94a3b8',
+            borderWidth: 2,
           },
-          label: {
-            show: true,
-            formatter: isPerson
-              ? `${node.icon} ${node.label}\n{meta|${node.meta || ''}}`
-              : `${node.icon} ${node.label}`,
-            rich: {
-              meta: {
-                fontSize: 11,
-                lineHeight: 16,
-                color: '#64748b',
-                fontWeight: 500,
-              },
-            },
-            color: '#0f172a',
-            fontSize: isPerson ? 12 : node.type === 'event' ? 12 : 13,
-            fontWeight: 700,
-            lineHeight: 18,
-            width: node.type === 'event' ? 156 : undefined,
-            overflow: 'truncate',
-          },
-          tooltip: {
-            formatter: `<strong>${escapeHtml(node.icon)} ${escapeHtml(node.label)}</strong><br>${escapeHtml(node.detail || '')}`,
-          },
-        });
-      }
-
-      actorOrder.forEach((actor, index) => {
-        const gap = safeWidth / (actorOrder.length + 1);
-        pushNode({
-          id: `actor:${actor.name}`,
-          type: 'person',
-          label: actor.name,
-          icon: actor.icon,
-          meta: actor.meta,
-          status: 'active',
-          detail: actor.meta,
-          x: Math.round(gap * (index + 1)),
-          y: actorY,
+          label: { show: true, color: '#0f172a', fontSize: 12, fontWeight: 700 },
         });
       });
-
-      activeEvents.forEach((event, index) => {
-        const actorId = event.actor ? `actor:${event.actor.name}` : null;
-        const eventId = `event:${index}`;
-        const eventX = eventLeft + (index * eventGap);
-        const eventY = eventStartY + ((index % 2) * 132);
-
-        pushNode({
-          id: eventId,
-          type: 'event',
-          label: event.display_title,
-          icon: event.node ? event.node.icon : '📝',
-          status: event.status,
-          detail: event.display_detail,
-          x: eventX,
-          y: eventY,
-          symbolSize: [188, 62],
+      safeArray(view.edges).forEach((edge, index) => {
+        links.push({
+          id: `edge:${index}`,
+          source: edge.from,
+          target: edge.to,
+          value: edge.label,
+          lineStyle: {
+            color: '#b8c2d6',
+            width: 2,
+          },
+          label: {
+            show: Boolean(edge.label),
+            formatter: edge.label || '',
+            color: '#64748b',
+            fontSize: 10,
+            backgroundColor: '#ffffff',
+            padding: [2, 6],
+            borderRadius: 8,
+          },
         });
-
-        if (index > 0) {
+      });
+      safeArray(view.key_moments).forEach((moment) => {
+        if (!moment.actor_id) return;
+        safeArray(moment.node_refs).forEach((nodeRef) => {
           links.push({
-            source: `event:${index - 1}`,
-            target: eventId,
+            source: `person:${moment.actor_id}`,
+            target: nodeRef,
+            value: moment.icon || statusIcon(kindToStatus(moment.kind)),
             lineStyle: {
-              color: 'rgba(100, 116, 139, 0.45)',
-              width: 2,
+              color: '#cbd5e1',
+              width: 1.8,
               type: 'dashed',
             },
-            symbol: ['none', 'arrow'],
-            symbolSize: 7,
-            label: {
-              show: true,
-              formatter: 'next',
-              color: '#64748b',
-              fontSize: 10,
-            },
           });
-        }
-
-        if (actorId) {
-          links.push({
-            source: actorId,
-            target: eventId,
-            lineStyle: {
-              color: statusColor(event.status),
-              width: 2.2,
-              opacity: 0.8,
-              curveness: 0.08,
-            },
-            symbol: ['none', 'arrow'],
-            symbolSize: 7,
-            label: {
-              show: true,
-              formatter: event.display_tag,
-              color: statusColor(event.status),
-              fontSize: 10,
-              backgroundColor: '#ffffff',
-              padding: [2, 6],
-              borderRadius: 8,
-            },
-          });
-        }
-
-        if (event.node) {
-          const topicId = `topic:${event.node.id}`;
-          topicIds.add(topicId);
-          pushNode({
-            id: topicId,
-            type: event.node.type,
-            label: event.node.label || event.display_title,
-            icon: event.node.icon,
-            status: event.status,
-            detail: event.display_detail,
-            x: eventX,
-            y: eventY + 118,
-          });
-
-          links.push({
-            source: eventId,
-            target: topicId,
-            lineStyle: {
-              color: statusColor(event.status),
-              width: 2.6,
-              opacity: 0.9,
-              curveness: 0,
-            },
-            symbol: ['none', 'arrow'],
-            symbolSize: 7,
-          });
-        }
-
-        if (event.edge) {
-          const fromId = `topic-ref:${event.edge.from}`;
-          const toId = `topic-ref:${event.edge.to}`;
-          if (!seen.has(fromId)) {
-            pushNode({
-              id: fromId,
-              type: 'context',
-              label: event.edge.from,
-              icon: '🔹',
-              status: event.status,
-              detail: '',
-              x: eventX - 110,
-              y: eventY + 118,
-            });
-          }
-          if (!seen.has(toId)) {
-            pushNode({
-              id: toId,
-              type: event.node ? event.node.type : 'option',
-              label: event.edge.to,
-              icon: event.node ? event.node.icon : '🔹',
-              status: event.status,
-              detail: event.display_detail,
-              x: eventX + 110,
-              y: eventY + 118,
-            });
-          }
-          links.push({
-            source: fromId,
-            target: toId,
-            lineStyle: {
-              color: statusColor(event.edge.status),
-              width: 2.8,
-              opacity: 0.85,
-              curveness: 0,
-            },
-            symbol: ['none', 'arrow'],
-            symbolSize: 8,
-            label: {
-              show: true,
-              formatter: `${event.edge.icon} ${event.edge.label}`,
-              color: '#475569',
-              fontSize: 11,
-              backgroundColor: '#ffffff',
-              padding: [2, 6],
-              borderRadius: 8,
-            },
-            emphasis: { focus: 'adjacency' },
-          });
-        }
+        });
       });
 
       return { nodes, links };
@@ -988,21 +952,22 @@
     let historyChart = null;
     let historyRenderState = null;
 
-    function renderHistoryGraph(events, step) {
+    function renderHistoryGraph(view) {
       const graphEl = document.getElementById('history-graph');
       if (!historyChart) {
         historyChart = echarts.init(graphEl, null, { renderer: 'svg' });
         window.addEventListener('resize', () => historyChart && historyChart.resize());
       }
-      historyRenderState = { events, step };
-      const graph = buildHistoryGraph(events, step, graphEl.clientWidth, graphEl.clientHeight);
+      historyRenderState = { view };
+      const graph = buildHistoryGraph(view);
       historyChart.setOption({
-        animationDurationUpdate: 700,
+        animationDurationUpdate: 500,
         animationEasingUpdate: 'cubicOut',
         tooltip: { trigger: 'item' },
         series: [{
           type: 'graph',
-          layout: 'none',
+          layout: 'force',
+          force: { repulsion: 260, edgeLength: 170, gravity: 0.08 },
           roam: true,
           draggable: false,
           data: graph.nodes,
@@ -1014,7 +979,7 @@
           lineStyle: {
             opacity: 0.7,
             width: 2,
-            curveness: 0,
+            curveness: 0.08,
           },
           labelLayout: {
             hideOverlap: true,
@@ -1028,7 +993,7 @@
       if (!historyChart || !historyRenderState) return;
       requestAnimationFrame(() => {
         historyChart.resize();
-        renderHistoryGraph(historyRenderState.events, historyRenderState.step);
+        renderHistoryGraph(historyRenderState.view);
       });
     }
 
@@ -1053,8 +1018,16 @@
       room.innerHTML = participants.map(participantHtml).join('');
     }
 
-    function setupHistory(historyData) {
-      const events = safeArray(historyData.events);
+    function setupHistory(view) {
+      const moments = safeArray(view.key_moments).map((moment) => ({
+        ts: moment.ts || '',
+        status: moment.status || kindToStatus(moment.kind),
+        display_tag: `${moment.icon} ${titleCase(moment.kind || kindToStatus(moment.kind))}`.trim(),
+        display_class: moment.status || kindToStatus(moment.kind),
+        display_title: moment.title,
+        display_detail: moment.detail,
+        actor: safeArray(view.people_involved).find((person) => person.id === moment.actor_id) || null,
+      }));
       const empty = document.getElementById('history-empty');
       const content = document.getElementById('history-content');
       const feed = document.getElementById('history-feed');
@@ -1063,22 +1036,21 @@
       const playButton = document.getElementById('history-play');
       const badge = document.getElementById('history-badge');
 
-      if (!events.length) {
+      if (!moments.length) {
         empty.style.display = 'block';
         content.style.display = 'none';
         return;
       }
 
-      badge.textContent = `${events.length} moves captured`;
+      badge.textContent = `${moments.length} moves captured`;
 
       let timer = null;
       let playing = false;
 
       function render(step) {
-        const activeEvents = events.slice(0, step + 1);
-        stepLabel.textContent = `Step ${step + 1} / ${events.length}`;
+        stepLabel.textContent = `Step ${step + 1} / ${moments.length}`;
 
-        feed.innerHTML = events.map((event, index) => eventCardHtml(event, index === step)).join('');
+        feed.innerHTML = moments.map((event, index) => eventCardHtml(event, index === step)).join('');
         Array.from(feed.children).forEach((card, index) => {
           card.addEventListener('click', () => {
             range.value = index;
@@ -1087,7 +1059,7 @@
           });
         });
 
-        renderHistoryGraph(events, step);
+        renderHistoryGraph(view);
       }
 
       function stop() {
@@ -1109,10 +1081,10 @@
         render(0);
         timer = setInterval(() => {
           step += 1;
-          if (step >= events.length) {
+          if (step >= moments.length) {
             stop();
-            range.value = events.length - 1;
-            render(events.length - 1);
+            range.value = moments.length - 1;
+            render(moments.length - 1);
             return;
           }
           range.value = step;
@@ -1120,7 +1092,7 @@
         }, 1200);
       }
 
-      range.max = Math.max(events.length - 1, 0);
+      range.max = Math.max(moments.length - 1, 0);
       range.value = range.max;
       range.addEventListener('input', (event) => {
         stop();
@@ -1128,12 +1100,12 @@
       });
       playButton.addEventListener('click', play);
 
-      render(events.length - 1);
+      render(moments.length - 1);
     }
 
-    function setupCurrent(currentData) {
-      const nodes = safeArray(currentData.nodes);
-      const edges = safeArray(currentData.edges);
+    function setupCurrent(view) {
+      const nodes = safeArray(view.nodes);
+      const edges = safeArray(view.edges);
       const empty = document.getElementById('current-empty');
       const content = document.getElementById('current-content');
 
@@ -1145,18 +1117,21 @@
 
       const grouped = {
         agreed: nodes.filter((node) => node.status === 'agreed'),
-        active: nodes.filter((node) => node.status === 'active' || node.status === 'linked' || node.status === 'challenged'),
+        active: nodes.filter((node) => node.status === 'active' || node.status === 'challenged'),
         open: nodes.filter((node) => node.status === 'open'),
         deferred: nodes.filter((node) => node.status === 'deferred'),
       };
 
       const summary = document.getElementById('current-summary');
-      summary.innerHTML = `
-        <div class="summary-card"><span class="label">Last refreshed</span><span class="value">${escapeHtml(currentData.updated_at || '-')}</span></div>
-        <div class="summary-card"><span class="label">Agreed</span><span class="value">${grouped.agreed.length}</span></div>
-        <div class="summary-card"><span class="label">Open</span><span class="value">${grouped.open.length}</span></div>
-        <div class="summary-card"><span class="label">Deferred</span><span class="value">${grouped.deferred.length}</span></div>
-      `;
+      const standout = safeArray(view.what_stands_out).slice(0, 4);
+      summary.innerHTML = standout.length
+        ? standout.map((item) => `<div class="summary-card"><span class="label">${escapeHtml(item.icon)}</span><span class="value" style="font-size:1rem;line-height:1.25;">${escapeHtml(item.text)}</span></div>`).join('')
+        : `
+            <div class="summary-card"><span class="label">Generated</span><span class="value">${escapeHtml(view.generated_at || '-')}</span></div>
+            <div class="summary-card"><span class="label">Agreed</span><span class="value">${grouped.agreed.length}</span></div>
+            <div class="summary-card"><span class="label">Open</span><span class="value">${grouped.open.length}</span></div>
+            <div class="summary-card"><span class="label">Deferred</span><span class="value">${grouped.deferred.length}</span></div>
+          `;
 
       const board = document.getElementById('current-map');
       board.innerHTML = `
@@ -1201,12 +1176,13 @@
       let bundle;
       try {
         loadingMsg.textContent = 'Decompressing...';
-        bundle = JSON.parse(decompress(hash));
+        bundle = normalizeGraphViewBundle(JSON.parse(decompress(hash)));
         logStep('main:bundle-parsed', {
           keys: Object.keys(bundle),
           markdownLength: bundle.markdown ? bundle.markdown.length : 0,
-          historyEvents: bundle.history && Array.isArray(bundle.history.events) ? bundle.history.events.length : 0,
-          currentNodes: bundle.current && Array.isArray(bundle.current.nodes) ? bundle.current.nodes.length : 0,
+          people: bundle.graphView && Array.isArray(bundle.graphView.people_involved) ? bundle.graphView.people_involved.length : 0,
+          moments: bundle.graphView && Array.isArray(bundle.graphView.key_moments) ? bundle.graphView.key_moments.length : 0,
+          nodes: bundle.graphView && Array.isArray(bundle.graphView.nodes) ? bundle.graphView.nodes.length : 0,
         });
       } catch (error) {
         loadingMsg.textContent = `Decode error: ${error.message}`;
@@ -1215,17 +1191,16 @@
         return;
       }
 
-      const { markdown, history, current, source } = bundle;
-      if (!markdown || !history || !current) {
-        loadingMsg.textContent = 'Bundle missing required fields: markdown, history, current';
+      const { markdown, graphView, source } = bundle;
+      if (!markdown || !graphView) {
+        loadingMsg.textContent = 'Bundle missing required fields: markdown, view';
         logStep('main:bundle-missing-fields');
         return;
       }
 
       try {
         logStep('main:validate-start');
-        validateHistoryPayload(history);
-        validateCurrentPayload(current);
+        validateGraphViewPayload(graphView);
         logStep('main:validate-complete');
       } catch (error) {
         loadingMsg.textContent = error.message;
@@ -1238,10 +1213,11 @@
       logStep('main:render-start');
       document.getElementById('hero-source').textContent = source || 'huddle.md';
       document.getElementById('spec-content').innerHTML = marked.parse(markdown);
-      renderParticipants(current.participants || []);
+      renderParticipants(graphView.people_involved || []);
+      renderEvidence(graphView.evidence || []);
       setupTabs();
-      setupHistory(history);
-      setupCurrent(current);
+      setupHistory(graphView);
+      setupCurrent(graphView);
       logStep('main:render-complete');
 
       overlay.classList.add('hidden');
