@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Huddle Review Surface</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: rgba(15, 23, 42, 0.10);
+      --panel: rgba(255, 255, 255, 0.96);
+      --panel-soft: rgba(248, 250, 252, 0.92);
+      --page: linear-gradient(180deg, #edf6ff 0%, #f8fafc 44%, #eef2ff 100%);
+      --teal: #0f766e;
+      --blue: #2563eb;
+      --amber: #b45309;
+      --rose: #be123c;
+      --slate: #475569;
+      --shadow: 0 28px 80px rgba(15, 23, 42, 0.10);
+    }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(34, 197, 94, 0.10), transparent 24%),
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 26%),
+        var(--page);
+    }
+
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      background: white;
+      z-index: 100;
+    }
+
+    #loading-overlay.hidden { display: none; }
+    #loading-msg { color: var(--muted); font-size: 14px; }
+
+    .page {
+      width: min(1180px, calc(100% - 28px));
+      margin: 24px auto 44px;
+      display: none;
+    }
+
+    .surface {
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.62);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 8px 4px 18px;
+    }
+
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.7rem, 4vw, 2.5rem);
+      line-height: 1;
+      letter-spacing: -0.05em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 720px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .hero-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid var(--line);
+      color: var(--ink);
+    }
+
+    .room {
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .participants {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .participant {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+    }
+
+    .participant .emoji { font-size: 1rem; }
+    .participant .name { font-weight: 800; }
+    .participant .meta { font-size: 0.84rem; color: var(--muted); }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--muted);
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      color: white;
+      background: linear-gradient(135deg, var(--teal), var(--blue));
+      box-shadow: 0 16px 34px rgba(37, 99, 235, 0.18);
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .panel {
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .spec-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .story {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 760px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .event-card, .node-card, .connector-card {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.98);
+      padding: 14px;
+      text-align: left;
+    }
+
+    .event-card.active {
+      border-color: rgba(37, 99, 235, 0.26);
+      box-shadow: 0 16px 36px rgba(37, 99, 235, 0.12);
+    }
+
+    .time {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .tag.active, .tag.idea { background: rgba(37, 99, 235, 0.10); color: var(--blue); }
+    .tag.linked, .tag.connection { background: rgba(15, 118, 110, 0.10); color: var(--teal); }
+    .tag.agreed, .tag.decision { background: rgba(16, 185, 129, 0.12); color: #047857; }
+    .tag.deferred { background: rgba(245, 158, 11, 0.14); color: var(--amber); }
+    .tag.open, .tag.question { background: rgba(190, 24, 93, 0.10); color: var(--rose); }
+    .tag.challenged { background: rgba(100, 116, 139, 0.12); color: var(--slate); }
+
+    .title {
+      margin: 0;
+      font-size: 1.02rem;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    .detail {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.93rem;
+    }
+
+    .who {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .history-stage, .current-stage {
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+      padding: 18px;
+      min-height: 720px;
+    }
+
+    .stage-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .stage-head h3 {
+      margin: 0;
+      font-size: 0.94rem;
+      letter-spacing: -0.02em;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .range { flex: 1 1 280px; }
+    .range input { width: 100%; }
+
+    .history-graph-wrap {
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+      overflow: hidden;
+    }
+
+    .history-graph-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+    .history-graph-toolbar p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .history-legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 9px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--muted);
+    }
+
+    #history-graph {
+      width: 100%;
+      height: 560px;
+    }
+
+    .state-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .summary-card {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      padding: 14px;
+    }
+
+    .summary-card .label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .summary-card .value {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .state-board {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .state-column {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .state-column h3 {
+      margin: 0 0 2px;
+      font-size: 0.83rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .connector-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .empty {
+      border-radius: 18px;
+      border: 1px dashed var(--line);
+      background: rgba(248, 250, 252, 0.84);
+      color: var(--muted);
+      padding: 18px;
+    }
+
+    .markdown-body {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .markdown-body h1, .markdown-body h2 {
+      padding-bottom: .3em;
+      border-bottom: 1px solid #d1d9e0b3;
+    }
+
+    .markdown-body h1 { font-size: 2em; margin: .67em 0; }
+    .markdown-body h2 { font-size: 1.5em; margin: 1.2em 0 .6em; }
+    .markdown-body h3 { font-size: 1.25em; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3,
+    .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+      font-weight: 600;
+      line-height: 1.25;
+      margin-top: 24px;
+      margin-bottom: 16px;
+    }
+
+    .markdown-body p, .markdown-body blockquote, .markdown-body ul, .markdown-body ol,
+    .markdown-body dl, .markdown-body table, .markdown-body pre, .markdown-body details {
+      margin-top: 0;
+      margin-bottom: 16px;
+    }
+
+    .markdown-body a { color: #0969da; text-decoration: none; }
+    .markdown-body a:hover { text-decoration: underline; }
+    .markdown-body code {
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+      font-size: 85%;
+      background-color: #afb8c133;
+      padding: .2em .4em;
+      border-radius: 6px;
+    }
+
+    .markdown-body pre {
+      background-color: #f6f8fa;
+      border-radius: 6px;
+      padding: 16px;
+      overflow: auto;
+      font-size: 85%;
+      line-height: 1.45;
+    }
+
+    .markdown-body blockquote {
+      color: #636c76;
+      border-left: .25em solid #d1d9e0;
+      padding: 0 1em;
+      margin-left: 0;
+    }
+
+    .markdown-body table {
+      border-spacing: 0;
+      border-collapse: collapse;
+      width: max-content;
+      max-width: 100%;
+    }
+
+    .markdown-body table th, .markdown-body table td {
+      padding: 6px 13px;
+      border: 1px solid #d1d9e0;
+    }
+
+    .markdown-body table th { font-weight: 600; background-color: #f6f8fa; }
+    .markdown-body table tr:nth-child(2n) { background-color: #f6f8fa; }
+    .markdown-body ul, .markdown-body ol { padding-left: 2em; }
+
+    @media (max-width: 1080px) {
+      .story,
+      .state-board,
+      .state-summary { grid-template-columns: 1fr; }
+      .page { width: min(100%, calc(100% - 16px)); }
+      .hero { flex-direction: column; }
+      .hero-meta { justify-content: flex-start; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+  <div id="loading-overlay">
+    <div>🎯 Huddle Review Surface</div>
+    <div id="loading-msg">Loading…</div>
+  </div>
+
+  <main id="app-root" class="page">
+    <div class="surface">
+      <header class="hero">
+        <div>
+          <h1>Huddle review</h1>
+          <p>Read the spec, see how the room moved, and check where the room stands now without losing the discussion trail.</p>
+        </div>
+        <div class="hero-meta">
+          <span class="pill">📄 <span id="hero-source">Loading…</span></span>
+          <span class="pill">📐 Elango-owned state</span>
+        </div>
+      </header>
+
+      <section class="room">
+        <div class="section-head">
+          <div>
+            <h2>People in this huddle</h2>
+            <p>The room stays visible. Elango keeps the shared state updated underneath.</p>
+          </div>
+          <span class="pill">Current room</span>
+        </div>
+        <div id="room-people" class="participants"></div>
+      </section>
+
+      <nav class="tabs" aria-label="Huddle views">
+        <button class="tab active" data-view="spec-view">Spec</button>
+        <button class="tab" data-view="history-view">How the conversation evolved</button>
+        <button class="tab" data-view="current-view">Where we stand now</button>
+      </nav>
+
+      <section id="spec-view" class="view active">
+        <div class="panel spec-wrap">
+          <div class="section-head">
+            <div>
+              <h2>Readable spec</h2>
+              <p>The human-readable projection of the current huddle.</p>
+            </div>
+            <span class="pill">Markdown</span>
+          </div>
+          <article id="spec-content" class="markdown-body"></article>
+        </div>
+      </section>
+
+      <section id="history-view" class="view">
+        <div class="panel">
+          <div class="section-head">
+            <div>
+              <h2>How the conversation evolved</h2>
+              <p>What got added, challenged, linked, agreed, deferred, or left open as the room progressed.</p>
+            </div>
+            <span id="history-badge" class="pill">Conversation flow</span>
+          </div>
+          <div id="history-empty" class="empty" style="display:none;">No history graph is available in this bundle yet.</div>
+          <div id="history-content" class="story">
+            <div id="history-feed" class="feed"></div>
+            <div class="history-stage">
+              <div class="stage-head">
+                <h3>Reasoning trail</h3>
+                <span id="history-step" class="pill">Step 0</span>
+              </div>
+              <div class="controls">
+                <button id="history-play" class="button" type="button">▶ Play flow</button>
+                <div class="range"><input id="history-range" type="range" min="0" max="0" value="0" /></div>
+              </div>
+              <div class="history-graph-wrap">
+                <div class="history-graph-toolbar">
+                  <p>Graph view of who shaped the room, what ideas surfaced, and how decisions connected.</p>
+                  <div class="history-legend">
+                    <span class="legend-chip">👤 people</span>
+                    <span class="legend-chip">💡 ideas</span>
+                    <span class="legend-chip">✅ decisions</span>
+                    <span class="legend-chip">⚔️ tensions</span>
+                  </div>
+                </div>
+                <div id="history-graph"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="current-view" class="view">
+        <div class="panel">
+          <div class="section-head">
+            <div>
+              <h2>Where we stand now</h2>
+              <p>The latest agreed, active, open, and deferred state of the room.</p>
+            </div>
+            <span class="pill">Latest shared state</span>
+          </div>
+          <div id="current-empty" class="empty" style="display:none;">No current-state graph is available in this bundle yet.</div>
+          <div id="current-content">
+            <div id="current-summary" class="state-summary"></div>
+            <div id="current-map" class="state-board"></div>
+            <div id="current-connections" class="connector-list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    function requireFields(obj, fields, context) {
+      const missing = fields.filter((field) => !obj[field]);
+      if (missing.length) throw new Error(`${context} missing required fields: ${missing.join(', ')}`);
+    }
+
+    function validateHistoryPayload(data) {
+      (data.events || []).forEach((event, index) => {
+        requireFields(event, ['status', 'display_tag', 'display_class', 'display_title', 'display_detail'], `graph-history events[${index}]`);
+        if (event.actor) requireFields(event.actor, ['name', 'icon', 'meta'], `graph-history events[${index}].actor`);
+        if (event.node) requireFields(event.node, ['id', 'type', 'label', 'status', 'icon'], `graph-history events[${index}].node`);
+        if (event.edge) requireFields(event.edge, ['from', 'to', 'type', 'status', 'icon', 'label'], `graph-history events[${index}].edge`);
+      });
+    }
+
+    function validateCurrentPayload(data) {
+      (data.participants || []).forEach((person, index) => requireFields(person, ['name', 'icon', 'meta'], `graph-current participants[${index}]`));
+      (data.nodes || []).forEach((node, index) => requireFields(node, ['id', 'type', 'label', 'status', 'icon', 'display_tag', 'display_detail'], `graph-current nodes[${index}]`));
+      (data.edges || []).forEach((edge, index) => requireFields(edge, ['from', 'to', 'type', 'status', 'icon', 'label'], `graph-current edges[${index}]`));
+    }
+
+    function decodeUrlSafeBase64(input) {
+      const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+      const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
+      return atob(normalized + padding);
+    }
+
+    function logStep(label, detail) {
+      if (detail === undefined) {
+        console.log(`[huddle] ${label}`);
+        return;
+      }
+      console.log(`[huddle] ${label}`, detail);
+    }
+
+    function decompress(b64) {
+      logStep('decode:start', { hashLength: b64.length });
+      const binary = decodeUrlSafeBase64(b64);
+      logStep('decode:base64-complete', { binaryLength: binary.length });
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      logStep('decode:inflate-start', { compressedBytes: bytes.length });
+      const inflated = window.pako.inflate(bytes);
+      logStep('decode:inflate-complete', { inflatedBytes: inflated.length });
+      const text = new TextDecoder().decode(inflated);
+      logStep('decode:text-ready', { textLength: text.length });
+      return text;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function safeArray(value) {
+      return Array.isArray(value) ? value : [];
+    }
+
+    function participantHtml(person) {
+      return `
+        <div class="participant">
+          <span class="emoji">${escapeHtml(person.icon)}</span>
+          <span class="name">${escapeHtml(person.name)}</span>
+          <span class="meta">${escapeHtml(person.meta)}</span>
+        </div>
+      `;
+    }
+
+    function tagHtml(status, displayTag) {
+      return `<span class="tag ${escapeHtml(status)} ${escapeHtml(status)}">${escapeHtml(displayTag)}</span>`;
+    }
+
+    function eventCardHtml(event, isActive) {
+      return `
+        <button type="button" class="event-card${isActive ? ' active' : ''}">
+          <span class="time">${escapeHtml(event.ts || '')}</span>
+          ${tagHtml(event.display_class, event.display_tag)}
+          <h4 class="title">${escapeHtml(event.display_title)}</h4>
+          <p class="detail">${escapeHtml(event.display_detail)}</p>
+          ${event.actor ? `<div class="who">${escapeHtml(event.actor.icon)} ${escapeHtml(event.actor.name)} · ${escapeHtml(event.actor.meta)}</div>` : ''}
+        </button>
+      `;
+    }
+
+    function nodeCardHtml(node) {
+      return `
+        <div class="node-card">
+          ${tagHtml(node.status, node.display_tag)}
+          <h4 class="title">${escapeHtml(node.label)}</h4>
+          <p class="detail">${escapeHtml(node.display_detail)}</p>
+        </div>
+      `;
+    }
+
+    function connectorCardHtml(edge) {
+      return `
+        <div class="connector-card">
+          ${tagHtml(edge.status, `${edge.icon} ${edge.label}`)}
+          <p class="detail">
+            <strong>${escapeHtml(edge.from)}</strong>
+            ${escapeHtml(edge.label.toLowerCase())}
+            <strong>${escapeHtml(edge.to)}</strong>
+          </p>
+        </div>
+      `;
+    }
+
+    function statusColor(status) {
+      const map = {
+        active: '#2563eb',
+        linked: '#0f766e',
+        agreed: '#10b981',
+        deferred: '#d97706',
+        open: '#be123c',
+        challenged: '#475569',
+      };
+      return map[status] || '#64748b';
+    }
+
+    function nodeTypeSymbol(type) {
+      const map = {
+        person: 'circle',
+        problem: 'roundRect',
+        context: 'roundRect',
+        option: 'roundRect',
+        argument: 'diamond',
+        tension: 'diamond',
+        decision: 'diamond',
+        question: 'roundRect',
+        action: 'roundRect',
+        result: 'roundRect',
+        event: 'roundRect',
+      };
+      return map[type] || 'roundRect';
+    }
+
+    function buildHistoryGraph(events, step, width, height) {
+      const activeEvents = events.slice(0, step + 1);
+      const nodes = [];
+      const links = [];
+      const seen = new Set();
+      const topicIds = new Set();
+      const actorOrder = [];
+      const actorSeen = new Set();
+      const safeWidth = Math.max(width || 760, 760);
+      const safeHeight = Math.max(height || 560, 560);
+      const actorY = 78;
+      const eventStartY = 205;
+      const eventGap = Math.max(150, Math.min(210, Math.floor((safeWidth - 140) / Math.max(activeEvents.length, 2))));
+      const eventLeft = 120;
+
+      activeEvents.forEach((event) => {
+        if (event.actor && !actorSeen.has(event.actor.name)) {
+          actorSeen.add(event.actor.name);
+          actorOrder.push(event.actor);
+        }
+      });
+
+      function pushNode(node) {
+        if (!node || seen.has(node.id)) return;
+        seen.add(node.id);
+        const isPerson = node.type === 'person';
+        const color = statusColor(node.status);
+        nodes.push({
+          id: node.id,
+          name: node.label,
+          value: node.detail || '',
+          symbol: nodeTypeSymbol(node.type),
+          x: node.x,
+          y: node.y,
+          symbolSize: node.symbolSize || (isPerson ? 56 : node.type === 'event' ? [176, 54] : (node.type === 'decision' ? 74 : node.type === 'tension' ? 62 : 70)),
+          draggable: false,
+          itemStyle: {
+            color: isPerson ? '#ffffff' : `${color}22`,
+            borderColor: color,
+            borderWidth: isPerson ? 2.5 : 2,
+            shadowBlur: 18,
+            shadowColor: `${color}22`,
+          },
+          label: {
+            show: true,
+            formatter: isPerson
+              ? `${node.icon} ${node.label}\n{meta|${node.meta || ''}}`
+              : `${node.icon} ${node.label}`,
+            rich: {
+              meta: {
+                fontSize: 11,
+                lineHeight: 16,
+                color: '#64748b',
+                fontWeight: 500,
+              },
+            },
+            color: '#0f172a',
+            fontSize: isPerson ? 12 : node.type === 'event' ? 12 : 13,
+            fontWeight: 700,
+            lineHeight: 18,
+            width: node.type === 'event' ? 156 : undefined,
+            overflow: 'truncate',
+          },
+          tooltip: {
+            formatter: `<strong>${escapeHtml(node.icon)} ${escapeHtml(node.label)}</strong><br>${escapeHtml(node.detail || '')}`,
+          },
+        });
+      }
+
+      actorOrder.forEach((actor, index) => {
+        const gap = safeWidth / (actorOrder.length + 1);
+        pushNode({
+          id: `actor:${actor.name}`,
+          type: 'person',
+          label: actor.name,
+          icon: actor.icon,
+          meta: actor.meta,
+          status: 'active',
+          detail: actor.meta,
+          x: Math.round(gap * (index + 1)),
+          y: actorY,
+        });
+      });
+
+      activeEvents.forEach((event, index) => {
+        const actorId = event.actor ? `actor:${event.actor.name}` : null;
+        const eventId = `event:${index}`;
+        const eventX = eventLeft + (index * eventGap);
+        const eventY = eventStartY + ((index % 2) * 132);
+
+        pushNode({
+          id: eventId,
+          type: 'event',
+          label: event.display_title,
+          icon: event.node ? event.node.icon : '📝',
+          status: event.status,
+          detail: event.display_detail,
+          x: eventX,
+          y: eventY,
+          symbolSize: [188, 62],
+        });
+
+        if (index > 0) {
+          links.push({
+            source: `event:${index - 1}`,
+            target: eventId,
+            lineStyle: {
+              color: 'rgba(100, 116, 139, 0.45)',
+              width: 2,
+              type: 'dashed',
+            },
+            symbol: ['none', 'arrow'],
+            symbolSize: 7,
+            label: {
+              show: true,
+              formatter: 'next',
+              color: '#64748b',
+              fontSize: 10,
+            },
+          });
+        }
+
+        if (actorId) {
+          links.push({
+            source: actorId,
+            target: eventId,
+            lineStyle: {
+              color: statusColor(event.status),
+              width: 2.2,
+              opacity: 0.8,
+              curveness: 0.08,
+            },
+            symbol: ['none', 'arrow'],
+            symbolSize: 7,
+            label: {
+              show: true,
+              formatter: event.display_tag,
+              color: statusColor(event.status),
+              fontSize: 10,
+              backgroundColor: '#ffffff',
+              padding: [2, 6],
+              borderRadius: 8,
+            },
+          });
+        }
+
+        if (event.node) {
+          const topicId = `topic:${event.node.id}`;
+          topicIds.add(topicId);
+          pushNode({
+            id: topicId,
+            type: event.node.type,
+            label: event.node.label || event.display_title,
+            icon: event.node.icon,
+            status: event.status,
+            detail: event.display_detail,
+            x: eventX,
+            y: eventY + 118,
+          });
+
+          links.push({
+            source: eventId,
+            target: topicId,
+            lineStyle: {
+              color: statusColor(event.status),
+              width: 2.6,
+              opacity: 0.9,
+              curveness: 0,
+            },
+            symbol: ['none', 'arrow'],
+            symbolSize: 7,
+          });
+        }
+
+        if (event.edge) {
+          const fromId = `topic-ref:${event.edge.from}`;
+          const toId = `topic-ref:${event.edge.to}`;
+          if (!seen.has(fromId)) {
+            pushNode({
+              id: fromId,
+              type: 'context',
+              label: event.edge.from,
+              icon: '🔹',
+              status: event.status,
+              detail: '',
+              x: eventX - 110,
+              y: eventY + 118,
+            });
+          }
+          if (!seen.has(toId)) {
+            pushNode({
+              id: toId,
+              type: event.node ? event.node.type : 'option',
+              label: event.edge.to,
+              icon: event.node ? event.node.icon : '🔹',
+              status: event.status,
+              detail: event.display_detail,
+              x: eventX + 110,
+              y: eventY + 118,
+            });
+          }
+          links.push({
+            source: fromId,
+            target: toId,
+            lineStyle: {
+              color: statusColor(event.edge.status),
+              width: 2.8,
+              opacity: 0.85,
+              curveness: 0,
+            },
+            symbol: ['none', 'arrow'],
+            symbolSize: 8,
+            label: {
+              show: true,
+              formatter: `${event.edge.icon} ${event.edge.label}`,
+              color: '#475569',
+              fontSize: 11,
+              backgroundColor: '#ffffff',
+              padding: [2, 6],
+              borderRadius: 8,
+            },
+            emphasis: { focus: 'adjacency' },
+          });
+        }
+      });
+
+      return { nodes, links };
+    }
+
+    let historyChart = null;
+    let historyRenderState = null;
+
+    function renderHistoryGraph(events, step) {
+      const graphEl = document.getElementById('history-graph');
+      if (!historyChart) {
+        historyChart = echarts.init(graphEl, null, { renderer: 'svg' });
+        window.addEventListener('resize', () => historyChart && historyChart.resize());
+      }
+      historyRenderState = { events, step };
+      const graph = buildHistoryGraph(events, step, graphEl.clientWidth, graphEl.clientHeight);
+      historyChart.setOption({
+        animationDurationUpdate: 700,
+        animationEasingUpdate: 'cubicOut',
+        tooltip: { trigger: 'item' },
+        series: [{
+          type: 'graph',
+          layout: 'none',
+          roam: true,
+          draggable: false,
+          data: graph.nodes,
+          links: graph.links,
+          emphasis: {
+            focus: 'adjacency',
+            scale: true,
+          },
+          lineStyle: {
+            opacity: 0.7,
+            width: 2,
+            curveness: 0,
+          },
+          labelLayout: {
+            hideOverlap: true,
+          },
+        }],
+      }, true);
+      historyChart.resize();
+    }
+
+    function refreshHistoryGraphLayout() {
+      if (!historyChart || !historyRenderState) return;
+      requestAnimationFrame(() => {
+        historyChart.resize();
+        renderHistoryGraph(historyRenderState.events, historyRenderState.step);
+      });
+    }
+
+    function setupTabs() {
+      const tabs = document.querySelectorAll('.tab');
+      const views = document.querySelectorAll('.view');
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          tabs.forEach((item) => item.classList.remove('active'));
+          views.forEach((view) => view.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById(tab.dataset.view).classList.add('active');
+          if (tab.dataset.view === 'history-view') {
+            setTimeout(refreshHistoryGraphLayout, 30);
+          }
+        });
+      });
+    }
+
+    function renderParticipants(participants) {
+      const room = document.getElementById('room-people');
+      room.innerHTML = participants.map(participantHtml).join('');
+    }
+
+    function setupHistory(historyData) {
+      const events = safeArray(historyData.events);
+      const empty = document.getElementById('history-empty');
+      const content = document.getElementById('history-content');
+      const feed = document.getElementById('history-feed');
+      const range = document.getElementById('history-range');
+      const stepLabel = document.getElementById('history-step');
+      const playButton = document.getElementById('history-play');
+      const badge = document.getElementById('history-badge');
+
+      if (!events.length) {
+        empty.style.display = 'block';
+        content.style.display = 'none';
+        return;
+      }
+
+      badge.textContent = `${events.length} moves captured`;
+
+      let timer = null;
+      let playing = false;
+
+      function render(step) {
+        const activeEvents = events.slice(0, step + 1);
+        stepLabel.textContent = `Step ${step + 1} / ${events.length}`;
+
+        feed.innerHTML = events.map((event, index) => eventCardHtml(event, index === step)).join('');
+        Array.from(feed.children).forEach((card, index) => {
+          card.addEventListener('click', () => {
+            range.value = index;
+            stop();
+            render(index);
+          });
+        });
+
+        renderHistoryGraph(events, step);
+      }
+
+      function stop() {
+        if (timer) clearInterval(timer);
+        timer = null;
+        playing = false;
+        playButton.textContent = '▶ Play flow';
+      }
+
+      function play() {
+        if (playing) {
+          stop();
+          return;
+        }
+        playing = true;
+        playButton.textContent = '⏸ Pause';
+        let step = 0;
+        range.value = 0;
+        render(0);
+        timer = setInterval(() => {
+          step += 1;
+          if (step >= events.length) {
+            stop();
+            range.value = events.length - 1;
+            render(events.length - 1);
+            return;
+          }
+          range.value = step;
+          render(step);
+        }, 1200);
+      }
+
+      range.max = Math.max(events.length - 1, 0);
+      range.value = range.max;
+      range.addEventListener('input', (event) => {
+        stop();
+        render(Number(event.target.value));
+      });
+      playButton.addEventListener('click', play);
+
+      render(events.length - 1);
+    }
+
+    function setupCurrent(currentData) {
+      const nodes = safeArray(currentData.nodes);
+      const edges = safeArray(currentData.edges);
+      const empty = document.getElementById('current-empty');
+      const content = document.getElementById('current-content');
+
+      if (!nodes.length) {
+        empty.style.display = 'block';
+        content.style.display = 'none';
+        return;
+      }
+
+      const grouped = {
+        agreed: nodes.filter((node) => node.status === 'agreed'),
+        active: nodes.filter((node) => node.status === 'active' || node.status === 'linked' || node.status === 'challenged'),
+        open: nodes.filter((node) => node.status === 'open'),
+        deferred: nodes.filter((node) => node.status === 'deferred'),
+      };
+
+      const summary = document.getElementById('current-summary');
+      summary.innerHTML = `
+        <div class="summary-card"><span class="label">Last refreshed</span><span class="value">${escapeHtml(currentData.updated_at || '-')}</span></div>
+        <div class="summary-card"><span class="label">Agreed</span><span class="value">${grouped.agreed.length}</span></div>
+        <div class="summary-card"><span class="label">Open</span><span class="value">${grouped.open.length}</span></div>
+        <div class="summary-card"><span class="label">Deferred</span><span class="value">${grouped.deferred.length}</span></div>
+      `;
+
+      const board = document.getElementById('current-map');
+      board.innerHTML = `
+        <section class="state-column">
+          <h3>Agreed</h3>
+          ${grouped.agreed.length ? grouped.agreed.map(nodeCardHtml).join('') : '<div class="empty">No agreed items yet.</div>'}
+        </section>
+        <section class="state-column">
+          <h3>Active</h3>
+          ${grouped.active.length ? grouped.active.map(nodeCardHtml).join('') : '<div class="empty">No active threads right now.</div>'}
+        </section>
+        <section class="state-column">
+          <h3>Open</h3>
+          ${grouped.open.length ? grouped.open.map(nodeCardHtml).join('') : '<div class="empty">No open questions right now.</div>'}
+        </section>
+        <section class="state-column">
+          <h3>Deferred</h3>
+          ${grouped.deferred.length ? grouped.deferred.map(nodeCardHtml).join('') : '<div class="empty">No deferred items right now.</div>'}
+        </section>
+      `;
+
+      const connections = document.getElementById('current-connections');
+      connections.innerHTML = edges.length
+        ? `<div class="section-head"><div><h2>Connections in the room</h2><p>How the current state ties together.</p></div><span class="pill">${edges.length} links</span></div>${edges.map(connectorCardHtml).join('')}`
+        : '';
+    }
+
+    async function main() {
+      logStep('main:start');
+      const overlay = document.getElementById('loading-overlay');
+      const loadingMsg = document.getElementById('loading-msg');
+      const appRoot = document.getElementById('app-root');
+      const hash = window.location.hash.slice(1);
+      logStep('main:hash-read', { hashLength: hash.length });
+
+      if (!hash) {
+        loadingMsg.textContent = 'No huddle bundle in URL. Use the launcher script to open a file here.';
+        logStep('main:no-hash');
+        return;
+      }
+
+      let bundle;
+      try {
+        loadingMsg.textContent = 'Decompressing...';
+        bundle = JSON.parse(decompress(hash));
+        logStep('main:bundle-parsed', {
+          keys: Object.keys(bundle),
+          markdownLength: bundle.markdown ? bundle.markdown.length : 0,
+          historyEvents: bundle.history && Array.isArray(bundle.history.events) ? bundle.history.events.length : 0,
+          currentNodes: bundle.current && Array.isArray(bundle.current.nodes) ? bundle.current.nodes.length : 0,
+        });
+      } catch (error) {
+        loadingMsg.textContent = `Decode error: ${error.message}`;
+        console.error('[huddle] decode:error', error);
+        console.error(error);
+        return;
+      }
+
+      const { markdown, history, current, source } = bundle;
+      if (!markdown || !history || !current) {
+        loadingMsg.textContent = 'Bundle missing required fields: markdown, history, current';
+        logStep('main:bundle-missing-fields');
+        return;
+      }
+
+      try {
+        logStep('main:validate-start');
+        validateHistoryPayload(history);
+        validateCurrentPayload(current);
+        logStep('main:validate-complete');
+      } catch (error) {
+        loadingMsg.textContent = error.message;
+        console.error('[huddle] validate:error', error);
+        console.error(error);
+        return;
+      }
+
+      loadingMsg.textContent = 'Rendering...';
+      logStep('main:render-start');
+      document.getElementById('hero-source').textContent = source || 'huddle.md';
+      document.getElementById('spec-content').innerHTML = marked.parse(markdown);
+      renderParticipants(current.participants || []);
+      setupTabs();
+      setupHistory(history);
+      setupCurrent(current);
+      logStep('main:render-complete');
+
+      overlay.classList.add('hidden');
+      appRoot.style.display = 'block';
+      logStep('main:visible');
+    }
+
+    main().catch((error) => {
+      document.getElementById('loading-msg').textContent = `Error: ${error.message}`;
+      console.error('[huddle] fatal:error', error);
+      console.error(error);
+    });
+  </script>
+</body>
+</html>
