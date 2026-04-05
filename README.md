@@ -81,20 +81,5 @@ python3 scripts/config_helper.py bootstrap <project_root> [repo_name] [branch] [
 
 ## Inspiration
 
-Huddle was strongly inspired by BMAD's party-mode direction, especially:
+https://github.com/bmad-code-org/BMAD-METHOD
 
-- persona-driven multi-voice discussion
-- markdown-defined agents
-- resumable discussion state
-- smart exit behavior
-
-Huddle is not a BMAD copy. It adapts those ideas into a repo-first workflow with practical routing, persistent state, spec capture, and browser-review support.
-
-It is also influenced by the stronger orchestration ideas seen in modern coding-agent systems:
-
-- discussion separated from planning and verification
-- coordinator-style routing without forcing the user to think in internal modes
-- persistence and completion over one-shot cleverness
-- practical tool use instead of pure conversational output
-
-Credit belongs to BMAD for the original party-mode spark, and to the broader agent-tooling ecosystem for pushing toward better planning, verification, persistence, and completion patterns.
