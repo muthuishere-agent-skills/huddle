@@ -19,6 +19,7 @@ next_action values:
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -26,11 +27,32 @@ from datetime import datetime, timezone
 
 
 # ---------------------------------------------------------------------------
+# Python binary detection — resolved once, used everywhere
+# ---------------------------------------------------------------------------
+
+def detect_python_bin():
+    """Return the first available Python 3 binary path, or None."""
+    for name in ("python3", "python"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
+def skills_root():
+    return pathlib.Path.home() / "config" / ".m-agent-skills"
+
+
+def userconfig_path():
+    return skills_root() / "userconfig.json"
+
+
 def repo_dir(reponame):
-    return pathlib.Path.home() / "config" / ".m-agent-skills" / reponame
+    return skills_root() / reponame
 
 
 def branch_dir(reponame, branch):
@@ -51,7 +73,7 @@ def huddle_note_path(reponame, branch, date_str):
 
 
 # ---------------------------------------------------------------------------
-# Repo identity — derived entirely from project_root, no pre-calls needed
+# Repo identity — cached in config after first detection
 # ---------------------------------------------------------------------------
 
 def _run(cmd, cwd=None):
@@ -62,33 +84,43 @@ def _run(cmd, cwd=None):
         return 1, ""
 
 
-def derive_repo_identity(project_root):
-    """Return (repo_name, owner_repo, branch, gh_available) from project_root."""
+def _detect_repo_name_and_owner(project_root):
+    """Detect repo_name and owner_repo from git remote. Fallback to folder name."""
     root = str(project_root)
-
-    # Branch
-    rc, branch = _run(["git", "branch", "--show-current"], cwd=root)
-    if rc != 0 or not branch:
-        branch = "main"
-
-    # Remote URL → parse repo_name and owner_repo
     rc, remote_url = _run(["git", "remote", "get-url", "origin"], cwd=root)
     if rc == 0 and remote_url:
-        # SSH: git@github.com:owner/repo.git
         m = re.search(r"[:/]([^/]+)/([^/]+?)(?:\.git)?$", remote_url)
         if m:
-            owner, repo_name = m.group(1), m.group(2)
-            owner_repo = f"{owner}/{repo_name}"
-        else:
-            repo_name = pathlib.Path(root).name
-            owner_repo = ""
-    else:
-        repo_name = pathlib.Path(root).name
-        owner_repo = ""
+            return m.group(2), f"{m.group(1)}/{m.group(2)}"
+    return pathlib.Path(root).name, ""
 
-    # gh available?
-    rc, _ = _run(["gh", "auth", "status"])
-    gh_available = rc == 0 and bool(owner_repo)
+
+def derive_repo_identity(project_root, cached_config=None):
+    """Return (repo_name, owner_repo, branch, gh_available) from project_root.
+
+    Uses cached_config values when available. Only branch is always fresh
+    (it changes between sessions). repo_name, owner_repo, and gh_available
+    are detected once and cached.
+    """
+    root = str(project_root)
+    cfg = cached_config or {}
+
+    # Branch — always fresh (changes between sessions)
+    rc, branch = _run(["git", "branch", "--show-current"], cwd=root)
+    if rc != 0 or not branch:
+        branch = cfg.get("local_branch", "main")
+
+    # repo_name + owner_repo — use cached, detect only on first run
+    repo_name = cfg.get("reponame", "")
+    owner_repo = cfg.get("owner_repo", "")
+    if not repo_name:
+        repo_name, owner_repo = _detect_repo_name_and_owner(root)
+
+    # gh_available — use cached, detect only on first run
+    gh_available = cfg.get("gh_available")
+    if gh_available is None:
+        rc, _ = _run(["gh", "auth", "status"])
+        gh_available = rc == 0 and bool(owner_repo)
 
     return repo_name, owner_repo, branch, gh_available
 
@@ -96,11 +128,6 @@ def derive_repo_identity(project_root):
 # ---------------------------------------------------------------------------
 # Parallel probes
 # ---------------------------------------------------------------------------
-
-def probe_git_user(project_root):
-    rc, out = _run(["git", "config", "user.name"], cwd=project_root)
-    return out if rc == 0 and out else "unknown"
-
 
 def probe_git_status(project_root):
     rc, out = _run(["git", "status", "--short"], cwd=project_root)
@@ -236,25 +263,113 @@ def _load_state(state_file):
 # ensure
 # ---------------------------------------------------------------------------
 
+def _load_userconfig():
+    """Load global userconfig.json, or return empty dict."""
+    p = userconfig_path()
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_userconfig(uc):
+    """Save global userconfig.json."""
+    p = userconfig_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(uc, indent=2) + "\n", encoding="utf-8")
+
+
+def _load_repo_config(reponame):
+    """Load existing config.json for this repo, or return empty dict."""
+    p = repo_dir(reponame) / "config.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_repo_config(reponame, config):
+    """Save config.json for this repo."""
+    p = repo_dir(reponame) / "config.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
 def ensure(project_root_str, date_str):
     project_root = str(pathlib.Path(project_root_str).resolve())
 
-    # Derive identity (fast, sequential — needed for path setup)
-    repo_name, owner_repo, branch, gh_available = derive_repo_identity(project_root)
+    # --- User-level config (global, shared across all repos) ---
+    uc = _load_userconfig()
+    uc_changed = False
+
+    # git_user: detect once globally
+    git_user = uc.get("git_user", "")
+    if not git_user:
+        rc, out = _run(["git", "config", "user.name"], cwd=project_root)
+        git_user = out if rc == 0 and out else "unknown"
+        uc["git_user"] = git_user
+        uc_changed = True
+
+    # python_bin: detect once globally
+    python_bin = uc.get("python_bin", "")
+    if not python_bin:
+        python_bin = detect_python_bin() or ""
+        if python_bin:
+            uc["python_bin"] = python_bin
+            uc_changed = True
+
+    # gh_available: detect once globally
+    gh_available_cached = uc.get("gh_available")
+
+    if uc_changed:
+        _save_userconfig(uc)
+
+    # --- Repo-level config ---
+    initial_name = pathlib.Path(project_root).name
+    repo_config = _load_repo_config(initial_name)
+
+    # Derive identity — uses cached repo config, only branch is always fresh
+    repo_name, owner_repo, branch, gh_available = derive_repo_identity(project_root, repo_config)
+
+    # Use cached gh_available if we have it, otherwise cache the detected value
+    if gh_available_cached is not None:
+        gh_available = gh_available_cached
+    elif not uc.get("gh_available"):
+        uc["gh_available"] = gh_available
+        _save_userconfig(uc)
+
+    # Reload repo config if repo_name differs from folder name
+    if repo_name != initial_name and not repo_config.get("reponame"):
+        repo_config = _load_repo_config(repo_name)
+
+    rc_changed = False
+
+    if not repo_config.get("reponame"):
+        repo_config["reponame"] = repo_name
+        rc_changed = True
+
+    if owner_repo and not repo_config.get("owner_repo"):
+        repo_config["owner_repo"] = owner_repo
+        rc_changed = True
+
+    if rc_changed:
+        _save_repo_config(repo_name, repo_config)
 
     # Create files before parallel probes so paths are stable
     state_file, note_file = _ensure_state_files(repo_name, branch, date_str)
 
-    # Run all probes in parallel
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        f_git_user      = pool.submit(probe_git_user, project_root)
+    # Run probes in parallel — only volatile/session-specific data
+    with ThreadPoolExecutor(max_workers=5) as pool:
         f_git_status    = pool.submit(probe_git_status, project_root)
         f_git_log       = pool.submit(probe_git_log, project_root)
         f_open_prs      = pool.submit(probe_open_prs, project_root, gh_available)
         f_project_scan  = pool.submit(probe_project_scan, repo_name, project_root)
         f_history       = pool.submit(probe_recent_huddle_history, repo_name, branch, date_str)
 
-    git_user      = f_git_user.result()
     git_status    = f_git_status.result()
     git_log       = f_git_log.result()
     open_prs      = f_open_prs.result()
@@ -268,6 +383,8 @@ def ensure(project_root_str, date_str):
     project_doc_missing = bool(project_scan.get("scan") and not project_doc_file.exists())
 
     warnings = []
+    if not python_bin:
+        warnings.append("Python not found. Install Python 3.x.")
     if not owner_repo:
         warnings.append("No git remote configured — PR listing and project docs scan skipped.")
 
@@ -279,6 +396,7 @@ def ensure(project_root_str, date_str):
         next_action = "show_roster"
 
     print(json.dumps({
+        "python_bin": python_bin,
         "git_user": git_user,
         "repo_name": repo_name,
         "owner_repo": owner_repo,

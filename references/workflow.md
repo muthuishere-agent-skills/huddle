@@ -20,9 +20,11 @@ Run a repo-scoped, daily, resumable discussion with multi-perspective analysis a
 ├── config.json                          ← shared repo preferences
 └── {BRANCH_NAME}/                       ← branch root for all future skill state
     └── huddle/
-        ├── huddle-state.json            ← open questions, action items, last topic
-        └── {YYYY-MM-DD}.md              ← daily huddle note
-        ├── graph-raw.json               ← append-oriented structural room changes, always updated in background
+        ├── huddle-state.json            ← synthesized state (written on demand or wrap-up, not every round)
+        ├── {YYYY-MM-DD}.md              ← daily huddle note (written on demand or wrap-up, not every round)
+        └── raw/                         ← append-only event files (fire-and-forget background writes)
+            ├── {ts}_decision.json       ← one file per decision
+            └── {ts}_milestone.json      ← one file per milestone
 ```
 
 Branch name is sanitised for the filesystem (e.g. `feature/login` → `feature-login`).
@@ -48,7 +50,13 @@ Persona metadata source:
 - `references/persona-roster.xml` is the lightweight roster and file lookup source
 - persona markdown files remain the source for full persona behavior and voice
 
+State write behavior:
+- during live discussion, NO file writes happen on normal rounds
+- on decisions/milestones: Write tool appends a single raw event JSON file to `raw/` — no Python script, no background process, just a direct file write
+- on explicit ask ("give me notes") or wrap-up: synthesis reads `raw/*.json` + conversation → writes `huddle-state.json` + `.md` → deletes `raw/`
+- use `{PYTHON_BIN}` (detected once in preflight) for script invocations (md_to_html.py, project_state.py, etc.) — never hardcode python3/python
+
 Graph review behavior:
 - state lives in `huddle-state.json` only — no `graph-raw.json`
-- when a graph view is needed, Elango generates `graph-view.json` from conversation + `huddle-state.json`
-- run `python3 scripts/md_to_html.py {note_path} {graph_view_path}` to bundle and open the review URL
+- when a graph view is needed, run synthesis first, then `{PYTHON_BIN} scripts/md_to_html.py {note_path}` to bundle and open the review URL
+- `index.html` derives graph nodes/edges from `decisions[]` client-side

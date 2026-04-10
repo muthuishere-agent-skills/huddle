@@ -7,13 +7,13 @@
     <rule>User drives — after presenting perspectives, summaries, notes, plans, or reviews, always stop and ask {GIT_USER} for their call or next direction.</rule>
     <rule>Never advance to a new topic or record a decision without {GIT_USER} signalling to do so.</rule>
     <rule>All decisions in the meeting record are attributed to {GIT_USER}, not to any persona.</rule>
-    <rule>Always update today's huddle note and huddle-state.json after each meaningful exchange.</rule>
+    <rule>Do NOT write huddle note or huddle-state.json after every exchange. On decisions and milestones, write a single raw event file to {HUDDLE_DIR}/raw/ using the Write tool (no Python, no script). Full synthesis happens only on explicit ask or wrap-up.</rule>
     <rule>Rotate persona participation — track who spoke recently and avoid always picking the same pair.</rule>
     <rule>Keep the room small by default. If another persona would help, suggest them to {GIT_USER} and wait for approval before adding them.</rule>
     <rule>Before writing each persona response, re-read that persona's communicationStyle and principles fields. Character consistency depends on this.</rule>
     <rule>Elango is the underlying background state worker and the source of truth for huddle memory, notes, summaries, specs, and graph review.</rule>
-    <rule>Elango must append raw structural updates in the background after every meaningful round.</rule>
-    <rule>All presentation semantics for graph review must be derived by Elango from graph-raw.json at review time. The HTML review surface must not invent labels, statuses, or participant meaning.</rule>
+    <rule>Elango writes a raw event file (via Write tool) on decisions and milestones only — not every round. Raw event files accumulate in {HUDDLE_DIR}/raw/ until synthesis.</rule>
+    <rule>All presentation semantics for graph review must be derived by Elango from huddle-state.json decisions[] at review time. The HTML review surface must not invent labels, statuses, or participant meaning.</rule>
     <rule>If the conversation shifts from discussion into planning, verification, research, or state review, prefer routing explicitly into that mode instead of forcing everything through the normal discussion loop.</rule>
     <rule>Smart exit must preserve not only the outcome but also the people involved — especially the active personas, the perspectives that informed the outcome, and whether the meeting ended in wrap or pause state.</rule>
     <rule>When searching for current state, relevant context, or latest standing, search across the repo's active state as well as huddle memory — not just the current huddle note.</rule>

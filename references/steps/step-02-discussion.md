@@ -33,11 +33,12 @@ This step runs as a loop — once per message from `{GIT_USER}`.
   </elango-rules>
 
   <state-rules>
-    <rule>Update today's huddle note and huddle-state.json after each meaningful exchange.</rule>
-    <rule>huddle-state.json is the only state file. No graph-raw.json.</rule>
-    <rule>Carry forward active_personas, latest_summary, open_questions, action_items, current_topic, decisions[], participants[], and key_moments[].</rule>
-    <rule>When a decision is recorded, preserve which perspectives informed it in decisions[].personas_involved.</rule>
-    <rule>Generate graph-view.json only when a visual review is needed — not on every turn.</rule>
+    <rule>Do NOT write huddle-state.json or the huddle note after each exchange. Fire huddle_writer.py in background on decisions and milestones only.</rule>
+    <rule>Raw event files accumulate in {HUDDLE_DIR}/raw/. Synthesis into huddle-state.json and .md happens only on explicit ask or wrap-up.</rule>
+    <rule>huddle-state.json is the only synthesized state file. No graph-raw.json.</rule>
+    <rule>On synthesis, build complete: decisions[], participants[], key_moments[], open_questions[], action_items[], current_topic, latest_summary, active_personas.</rule>
+    <rule>When a decision is recorded in a raw event, include personas involved in the event JSON.</rule>
+    <rule>Generate graph review only when a visual review is needed — not on every turn.</rule>
   </state-rules>
 </step-policy>
 
@@ -213,87 +214,82 @@ If the round clearly completed the user's current objective, you may instead end
 ## Step 7: Record Decisions
 
 When `{GIT_USER}` makes a call:
-- Record it in today's huddle note as: `Decision ({GIT_USER}): ...`
-- Note which perspective(s) informed it
-- Note any open questions or follow-up actions
 - If the decision clearly reached closure, Elango may surface briefly with:
   `We've decided this. Want to have a look?`
-- If `{GIT_USER}` wants to review the current state: Elango generates the graph view JSON, writes to `/tmp/huddle-graph-view.json`, runs:
-  `python3 scripts/md_to_html.py {note_path} /tmp/huddle-graph-view.json`
-- Open the review URL in the browser
+- If `{GIT_USER}` wants to review the current state, run synthesis (Step 9) then launch the graph review.
 
-Update `huddle-state.json` with:
-- `last_huddle_date`
-- `current_topic`
-- `open_questions`
-- `action_items`
-- `latest_summary`
-- `active_personas` (who spoke this round)
+**Do NOT write to huddle-state.json or the huddle note here.** Instead, use the Write tool to append a raw event file directly:
+
+Write a JSON file to `{HUDDLE_DIR}/raw/{timestamp_ms}_{type}.json` where `timestamp_ms` is the current Unix time in milliseconds.
+
+**Event JSON shape:**
+```json
+{
+  "type": "decision",
+  "ts": 1744307200000,
+  "topic": "...",
+  "content": "...",
+  "personas": ["Shaama", "Suren"],
+  "by": "{GIT_USER}",
+  "rejected": ["..."],
+  "open": ["..."]
+}
+```
+
+This is a single atomic file write — no reads, no merges, no Python process, no script invocation. Instant.
+
+**Event types to write:**
+
+| Trigger | Event type | When |
+|---|---|---|
+| `decision` | User confirms a decision | Include `topic`, `content`, `personas`, `by`, optional `rejected`, `open` |
+| `milestone` | Key moment (tension surfaced, path rejected, important insight) | Include `topic`, `content`, `personas` |
+
+Normal discussion rounds (no decision, no milestone) → **no write at all**.
 
 Then ask: **"What's next, {GIT_USER}?"**
 
-## Step 8: Elango — Background State Pass
+## Step 8: Elango — No Per-Round Writes
 
-**Elango runs silently throughout the huddle as an underlying background pass.** He is NOT selected in persona rounds.
+**Elango does NOT write files after every round.** He tracks state in conversation context only during the live session.
 
-After every discussion round (Steps 4-7):
+On decisions and milestones only, Elango writes a single raw event file using the Write tool. No Python script, no background process — just a direct file write.
 
-1. **Read** `huddle-state.json` — always read before writing
-2. **Read** conversation history since last checkpoint
-3. **Update** the following fields:
-   - `current_topic`
-   - `latest_summary`
-   - `open_questions[]`
-   - `action_items[]`
-   - `active_personas[]`
-   - `decisions[]` — add or update entries; mark closed decisions with `status: "closed"`
-   - `participants[]` — add any persona that spoke this round
-   - `key_moments[]` — add one entry per meaningful turn (decision made, tension surfaced, path rejected)
-4. **Write** the updated `huddle-state.json` back
-5. **Update** today's huddle note (`{YYYY-MM-DD}.md`) with the same information in Markdown
+This is invisible to `{GIT_USER}` — no output, no interruptions, no file I/O on normal rounds.
 
-This is invisible to `{GIT_USER}` — no output, no interruptions.
+## Step 9: Elango — Synthesis on Demand
 
-The graph view JSON is generated only on demand:
-- "where do we stand?" / "show me the graph" / "open the huddle"
-- decision check-in after closure
-- wrap-up review when asked
+When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph review — OR during wrap-up:
 
-When the graph view is needed:
-1. Ensure `huddle-state.json` is fully up to date (decisions, evidence, participants, key_moments)
-2. Run: `python3 scripts/md_to_html.py {note_path}`
-3. `index.html` derives nodes, edges, and evidence from `decisions[]` client-side
+**Synthesis process:**
 
-## Step 9: Elango — Output on Demand
+1. Read all `{HUDDLE_DIR}/raw/*.json` files, sorted by filename (timestamp order)
+2. Combine raw events with conversation context to build the full picture
+3. Write `huddle-state.json` with complete: `decisions[]`, `participants[]`, `key_moments[]`, `open_questions[]`, `action_items[]`, `current_topic`, `latest_summary`, `active_personas`
+4. Write today's huddle note `{HUDDLE_NOTE_FILE}` in the Meeting Document Shape below
+5. Delete all files in `{HUDDLE_DIR}/raw/` (they've been synthesized)
+6. If graph review is needed: run `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}` and open in browser
 
-When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph review:
+**What triggers synthesis:**
+
+| User says | Action |
+|---|---|
+| "give me the notes" / "capture this" / "take notes" | Synthesize from raw + conversation, write `.md` + `huddle-state.json`, present to user |
+| "where do we stand?" / "show me the graph" / "open the huddle" | Synthesize, then launch graph review in browser |
+| "create a spec" / "write the spec" | Synthesize, then produce structured spec format |
+| wrap-up / exit | Synthesize as part of step-03 exit flow |
+
+**Output rules:**
 
 1. **Elango speaks** — "Here's what I captured." — and produces the requested format
-2. Formats based on what was asked (see `saman-specwriter.md` for output modes)
-3. Include context, rationale, and decision flow when they help a future reader understand how the discussion evolved
-4. If the discussion had meaningful branching, dependencies, or tradeoffs, Elango may include a Mermaid decision graph
-5. If the user asks where things stand, Elango should derive the readable graph plus a readable summary
-6. If the user asks how the discussion evolved, Elango should derive the readable graph with key moments, evidence, and connected branches
-7. If user asks for a spec, Elango synthesizes all accumulated notes into the structured spec format
-8. If gaps exist (e.g., no NFR discussion happened), Elango flags them: "Note: the meeting didn't cover X"
-9. Prefer `flowchart TD` Mermaid for decision graphs unless another Mermaid shape is clearly better
-10. **Present to `{GIT_USER}`** for review
-11. If `{GIT_USER}` says "save it" / "put it in the repo" → save to `{project-root}/docs/specs/{feature-name}.md`
-12. Record in today's huddle note: `Spec saved: docs/specs/{feature-name}.md`
-
-If `{GIT_USER}` asks:
-
-- "where do we stand?"
-- "show me the huddle"
-- "open the notes"
-- "let me see the current document"
-
-Then Elango should:
-
-1. identify the current huddle Markdown file
-2. ensure `huddle-state.json` is current
-3. run `python3 scripts/md_to_html.py {note_path}`
-4. open the generated review URL in the browser
+2. Include context, rationale, and decision flow when they help a future reader understand the discussion
+3. If the discussion had meaningful branching, dependencies, or tradeoffs, include a Mermaid decision graph
+4. If user asks where things stand, derive the readable graph plus a readable summary
+5. If user asks for a spec, synthesize all accumulated state into structured spec format
+6. If gaps exist (e.g., no NFR discussion happened), flag them: "Note: the meeting didn't cover X"
+7. Prefer `flowchart TD` Mermaid for decision graphs unless another Mermaid shape is clearly better
+8. **Present to `{GIT_USER}`** for review
+9. If `{GIT_USER}` says "save it" / "put it in the repo" → save to `{project-root}/docs/specs/{feature-name}.md`
 
 ## Meeting Document Shape
 
