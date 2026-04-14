@@ -58,5 +58,5 @@ State write behavior:
 
 Graph review behavior:
 - state lives in `huddle-state.json` only — no `graph-raw.json`
-- when a graph view is needed, run synthesis first, then `{PYTHON_BIN} scripts/md_to_html.py {note_path}` to bundle and open the review URL
+- never auto-open the graph review page; only run `{PYTHON_BIN} scripts/md_to_html.py {note_path}` when {GIT_USER} explicitly asks to see the graph
 - `index.html` derives graph nodes/edges from `decisions[]` client-side

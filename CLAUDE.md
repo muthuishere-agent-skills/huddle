@@ -21,6 +21,7 @@ references/
     step-02-discussion.md         # Main discussion loop (all modes route here)
     step-03-smart-exit.md         # Wrap-up / pause persistence
     step-deepak-document.md       # Project documentation sub-task
+    step-elanchezian-brainstorm.md # Progressive brainstorming sub-task
 scripts/                          # Python helpers (no external deps, stdlib only)
 e2e/run.py                       # Smoke tests
 ```

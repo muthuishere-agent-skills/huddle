@@ -10,6 +10,7 @@ This step runs as a loop — once per message from `{GIT_USER}`.
     <mode id="planning">Use when the user wants implementation shape, sequencing, or execution structure.</mode>
     <mode id="verification">Use when the user wants to pressure-test completeness, soundness, confidence, or truth of a claim.</mode>
     <mode id="research">Use when freshness, latest signals, or source-backed ecosystem research are central.</mode>
+    <mode id="brainstorming">Use when {GIT_USER} wants to brainstorm, ideate, or explore options. Elanchezian takes the room as a sub-task via step-elanchezian-brainstorm.md.</mode>
     <mode id="spec-review">Use for Elango-led notes, summaries, specs, action items, and graph review.</mode>
   </modes>
 
@@ -27,7 +28,7 @@ This step runs as a loop — once per message from `{GIT_USER}`.
     <rule>Elango silently reads huddle-state.json first, then updates it with decisions, rationale, rejected paths, action items, participants, key moments, and open questions.</rule>
 
     <rule>If a decision reaches closure, Elango may briefly offer review: "We've decided this. Want to have a look?"</rule>
-    <rule>If {GIT_USER} asks where things stand or wants to see the graph, ensure huddle-state.json is current, then run: python3 scripts/md_to_html.py {note_path} — index.html derives the graph from decisions[] client-side.</rule>
+    <rule>If {GIT_USER} asks where things stand, summarize from huddle-state.json in conversation — do NOT auto-open the graph review page. Only run md_to_html.py and open the browser when {GIT_USER} explicitly asks to see the graph (e.g. "show me the graph", "open the graph", "open the review page").</rule>
     <rule>When producing notes, summary, spec, or graph views, Elango may include Mermaid decision flow when it adds signal.</rule>
     <rule>Generate the graph view only when a visual review is needed — not on every turn.</rule>
   </elango-rules>
@@ -44,6 +45,7 @@ This step runs as a loop — once per message from `{GIT_USER}`.
 
 <deepak-doc-rules>
   <rule>Track DEEPAK_DOC_OFFERED=false at session start. Deepak may surface a documentation offer AT MOST ONCE per session.</rule>
+  <rule>If the repo/folder has fewer than 20 files (empty or near-empty project) → never offer docs, never mention docs. Treat as if PROJECT_DOC_MISSING=false.</rule>
   <rule>If DEEPAK_DOC_OFFERED=false AND PROJECT_DOC_MISSING=true AND current topic is repo-related:
     Deepak says: "📝 **Deepak** _(Tech Writer)_ — I don't see any project documentation yet. Want me to do a quick scan and write one?"
     Set DEEPAK_DOC_OFFERED=true regardless of user answer.</rule>
@@ -99,6 +101,7 @@ Identify the domain of `{GIT_USER}`'s message:
 - test strategy/architecture → Deva, Nina, Suren (+ Shaama if infra-related)
 - rapid execution/shipping → Srey, Shaama (+ Nina if quality concerns)
 - founder / ambition / bold-bet / category question → Dileep, Maya, Babu (+ Srey if execution pressure matters)
+- brainstorming/ideation/options/alternatives → Elanchezian takes the room as a sub-task via step-elanchezian-brainstorm.md (not a normal discussion participant — runs the full progressive brainstorm flow)
 - spec creation/requirements → Elango has been capturing in the background — he produces output on demand (not a discussion participant)
 - "what do you think about X" → pick 2-3 most relevant
 - "create a spec" / "write the spec" → Elango produces spec from accumulated state (see Step 8)
@@ -216,7 +219,7 @@ If the round clearly completed the user's current objective, you may instead end
 When `{GIT_USER}` makes a call:
 - If the decision clearly reached closure, Elango may surface briefly with:
   `We've decided this. Want to have a look?`
-- If `{GIT_USER}` wants to review the current state, run synthesis (Step 9) then launch the graph review.
+- If `{GIT_USER}` wants to review the current state, run synthesis (Step 9) and summarize in conversation. Do NOT auto-open the graph review page.
 
 **Do NOT write to huddle-state.json or the huddle note here.** Instead, use the Write tool to append a raw event file directly:
 
@@ -268,14 +271,15 @@ When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph revi
 3. Write `huddle-state.json` with complete: `decisions[]`, `participants[]`, `key_moments[]`, `open_questions[]`, `action_items[]`, `current_topic`, `latest_summary`, `active_personas`
 4. Write today's huddle note `{HUDDLE_NOTE_FILE}` in the Meeting Document Shape below
 5. Delete all files in `{HUDDLE_DIR}/raw/` (they've been synthesized)
-6. If graph review is needed: run `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}` and open in browser
+6. Do NOT auto-open the graph review page. Only run `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}` when {GIT_USER} explicitly asks to see the graph.
 
 **What triggers synthesis:**
 
 | User says | Action |
 |---|---|
 | "give me the notes" / "capture this" / "take notes" | Synthesize from raw + conversation, write `.md` + `huddle-state.json`, present to user |
-| "where do we stand?" / "show me the graph" / "open the huddle" | Synthesize, then launch graph review in browser |
+| "where do we stand?" / "open the huddle" | Synthesize, summarize in conversation. Do NOT open graph. |
+| "show me the graph" / "open the graph" / "open the review page" | Synthesize, then launch graph review in browser (ONLY trigger for opening graph) |
 | "create a spec" / "write the spec" | Synthesize, then produce structured spec format |
 | wrap-up / exit | Synthesize as part of step-03 exit flow |
 

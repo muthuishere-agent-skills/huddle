@@ -17,6 +17,7 @@ next_action values:
 """
 
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -157,6 +158,30 @@ def probe_open_prs(project_root, gh_available):
         return json.loads(out)
     except Exception:
         return []
+
+
+def has_enough_files(project_root, threshold=20):
+    """Fast check: at least `threshold` files exist (skips .git)."""
+    if not os.path.isdir(project_root):
+        return False
+    count = 0
+    for entry in os.scandir(project_root):
+        if entry.name == ".git":
+            continue
+        if entry.is_file(follow_symlinks=False):
+            count += 1
+        elif entry.is_dir(follow_symlinks=False):
+            try:
+                for sub in os.scandir(entry.path):
+                    if sub.is_file(follow_symlinks=False):
+                        count += 1
+                        if count >= threshold:
+                            return True
+            except PermissionError:
+                pass
+        if count >= threshold:
+            return True
+    return False
 
 
 def probe_project_scan(reponame, project_root):
@@ -380,7 +405,8 @@ def ensure(project_root_str, date_str):
     is_resume = _note_has_content(note_file)
 
     project_doc_file = repo_dir(repo_name) / "project-state.json"
-    project_doc_missing = bool(project_scan.get("scan") and not project_doc_file.exists())
+    repo_has_content = has_enough_files(project_root)
+    project_doc_missing = bool(project_scan.get("scan") and not project_doc_file.exists() and repo_has_content)
 
     warnings = []
     if not python_bin:

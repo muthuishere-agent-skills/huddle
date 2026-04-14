@@ -7,7 +7,7 @@ Use natural wrap-up detection. Do not require explicit keywords.
     <rule>Do not reduce exit to a generic summary. Preserve the outcome, the people involved, and whether the meeting is paused or truly closed.</rule>
     <rule>Capture active personas and the perspectives that most directly shaped the outcome.</rule>
     <rule>Preserve decisions, open questions, action items, latest summary, and status.</rule>
-    <rule>If {GIT_USER} wants review, open the current huddle review bundle in the browser.</rule>
+    <rule>Do NOT auto-open the graph review page on wrap-up. Only open it if {GIT_USER} explicitly asks to see the graph (e.g. "show me the graph", "open the graph").</rule>
   </exit-rules>
 
   <persisted-state>
@@ -24,7 +24,7 @@ Use natural wrap-up detection. Do not require explicit keywords.
     <rule>Elango owns the final note state and visual review flow.</rule>
     <rule>On wrap-up, Elango runs full synthesis: read {HUDDLE_DIR}/raw/*.json + conversation context → write huddle-state.json and {date}.md → delete raw files.</rule>
     <rule>Do not generate or refresh the graph projection during wrap-up unless {GIT_USER} asks for review or accepts a review prompt.</rule>
-    <rule>If the user wants to inspect the final notes, run synthesis first, then launch {PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py and open the review URL in the browser.</rule>
+    <rule>If the user explicitly asks to see the graph ("show me the graph", "open the graph", "open the review page"), run synthesis first, then launch {PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py and open the review URL in the browser. Do NOT offer or auto-open otherwise.</rule>
     <rule>Exit should leave enough context that a future resume can understand both the conclusions and who shaped them.</rule>
   </elango-rules>
 </step-policy>
@@ -56,9 +56,7 @@ Do not trigger if the phrase is incidental inside a larger question.
 7. List open questions
 8. List action items
 9. If the user paused rather than fully ended, say so explicitly: "Paused here." Set `meeting_status="paused"`.
-10. If `{GIT_USER}` wants to inspect the final notes visually, launch:
-    `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}`
-    and open the review URL in the browser
+10. Do NOT auto-open the graph review page. Only launch `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}` if `{GIT_USER}` explicitly asks to see the graph.
 11. Tell `{GIT_USER}` they can resume by starting `huddle` again in this repo
 
 ## Final Response Format

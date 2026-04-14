@@ -43,6 +43,8 @@ Read `HUDDLE_INIT.next_action` and act immediately:
 
 ### `"deepak_doc_offer"`
 
+**Guard:** If the repo/folder has fewer than 20 files (empty or near-empty project), skip this entirely — treat as `show_roster` instead. The Python preflight already checks this, but if it slips through, do not offer docs for a nearly empty folder.
+
 Deepak speaks first. Do not show the roster yet.
 
 Brief `{GIT_USER}` on repo state from `HUDDLE_INIT.repo_work_state`, then Deepak says:
