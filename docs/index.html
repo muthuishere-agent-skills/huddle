@@ -568,19 +568,24 @@
       const lastClosed = closed[closed.length - 1] || null;
 
       const evidenceMap = new Map();
+      let evidenceCounter = 0;
       decisions.forEach((d) => {
         (d.evidence || []).forEach((e) => {
-          if (e.ref && !evidenceMap.has(e.ref)) evidenceMap.set(e.ref, e);
+          if (e.ref && !evidenceMap.has(e.ref)) {
+            const id = e.id || `src-${evidenceCounter++}`;
+            evidenceMap.set(e.ref, { ...e, id, icon: e.icon || "🔗", kind: e.kind || "web", label: e.label || autoLabelFromRef(e.ref) });
+          }
         });
       });
 
       const nodes = decisions.map((d, i) => ({
         id: d.id || `d-${i}`,
-        kind: d.status === "closed" ? "decision" : "question",
+        kind: d.status === "closed" ? "decision" : "unresolved",
         label: d.topic,
         status: d.status === "closed" ? "agreed" : "open",
         icon: d.status === "closed" ? "✅" : "❓",
         why_it_matters: d.rationale || d.decision || d.topic,
+        source_refs: (d.evidence || []).filter((e) => e.ref && evidenceMap.has(e.ref)).map((e) => evidenceMap.get(e.ref).id),
       }));
 
       const edges = [];
