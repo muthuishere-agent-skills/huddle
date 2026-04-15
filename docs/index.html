@@ -603,6 +603,7 @@
           status: "open",
           icon: "💡",
           why_it_matters: state.latest_summary || state.current_topic || "Current huddle status.",
+          source_refs: [],
         });
 
         openQuestions.slice(0, 3).forEach((question, index) => {
@@ -614,6 +615,7 @@
             status: "open",
             icon: "❓",
             why_it_matters: question,
+            source_refs: [],
           });
           edges.push({ from: topicId, to: nodeId, relation: "needs-answer", label: "needs answer" });
         });
@@ -627,6 +629,7 @@
             status: "noted",
             icon: moment.icon || "📚",
             why_it_matters: Array.isArray(moment.evidence) ? moment.evidence.join(" • ") : (moment.detail || moment.summary || ""),
+            source_refs: [],
           });
           edges.push({ from: nodeId, to: topicId, relation: "supports", label: "supports" });
         });
