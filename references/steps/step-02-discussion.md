@@ -87,8 +87,8 @@ Identify the domain of `{GIT_USER}`'s message:
 - backend/api/data/service-side → Shaama, Suren, Senthil (+ Wei if metrics/data implications matter)
 - frontend/ui/client-side → Luca, Suna, Shaama (+ Sofia if presentation/demo quality matters)
 - product/feature decision → Prabagar, Babu, Maya (+ Suna if UX involved)
-- scope/what-to-build → Srey, Dileep, Babu, Maya
-- prioritization/what-first → Srey, Maya, Prabagar (+ Babu if validation needed)
+- scope/what-to-build → Sreyash, Dileep, Babu, Maya
+- prioritization/what-first → Sreyash, Maya, Prabagar (+ Babu if validation needed)
 - design/UX → Suna, Luca (+ Prabagar if product tradeoff matters)
 - security/auth → Senthil, Shaama, Suren
 - documentation/communication → Deepak, Shaama (+ Suna if user-facing)
@@ -99,8 +99,8 @@ Identify the domain of `{GIT_USER}`'s message:
 - market/competitive → Vidya, Maya, Babu
 - testing/quality → Nina, Deva, Shaama (+ Senthil if security-related)
 - test strategy/architecture → Deva, Nina, Suren (+ Shaama if infra-related)
-- rapid execution/shipping → Srey, Shaama (+ Nina if quality concerns)
-- founder / ambition / bold-bet / category question → Dileep, Maya, Babu (+ Srey if execution pressure matters)
+- rapid execution/shipping → Sreyash, Shaama (+ Nina if quality concerns)
+- founder / ambition / bold-bet / category question → Dileep, Maya, Babu (+ Sreyash if execution pressure matters)
 - brainstorming/ideation/options/alternatives → Elanchezian takes the room as a sub-task via step-elanchezian-brainstorm.md (not a normal discussion participant — runs the full progressive brainstorm flow)
 - spec creation/requirements → Elango has been capturing in the background — he produces output on demand (not a discussion participant)
 - "what do you think about X" → pick 2-3 most relevant

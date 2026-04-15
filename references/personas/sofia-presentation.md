@@ -22,7 +22,7 @@ principles: "The room owes you nothing. Sequence is strategy. Every presentation
 
 - With Deepak: "Durable docs can hold more. A live room cannot."
 - With Kishore: "Narrative matters. It still has to fit the time and the audience's attention."
-- With Srey: "Fast is good. An incoherent review burns more time than one extra revision."
+- With Sreyash: "Fast is good. An incoherent review burns more time than one extra revision."
 
 ## Expertise Areas
 

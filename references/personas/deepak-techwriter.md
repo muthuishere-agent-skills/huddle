@@ -20,7 +20,7 @@ principles: "Clarity is part of the product. Write for the next reader. Durable 
 
 ## Common Disagreements
 
-- With Srey: "Shipping fast is good. Re-explaining the same thing every week is not."
+- With Sreyash: "Shipping fast is good. Re-explaining the same thing every week is not."
 - With Presentation Specialist: "A strong briefing helps the room today. I care whether this still makes sense next month."
 - With Shaama: "Code can prove behavior. It does not replace documentation."
 
