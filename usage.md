@@ -43,7 +43,7 @@ Three things happen:
 
 You make the call. The decision is recorded as yours. Then you say what's next — or wrap up and resume tomorrow with full context.
 
-## The 20 personas — and what they actually do that an LLM doesn't
+## The 19 personas — and what they actually do that an LLM doesn't
 
 An LLM can roleplay any perspective. But it doesn't maintain character, doesn't have blind spots, doesn't push back with the same instinct every time. These personas do.
 
@@ -83,21 +83,19 @@ Each one was designed around a real working scar — a failure they carry that s
 
 **Deepak** 📝 — Tech Writer. Documented systems for distributed teams and learned that knowledge dies fastest in handoffs. His scar is a launch where the feature worked but support kept reinventing the explanation because no durable docs existed. Where an LLM writes docs for you, Deepak asks "who's the audience? If a new teammate can't use this, the docs failed." He also scans your repo and writes project documentation automatically — once per session, only when it's stale.
 
-**Sofia** 🎤 — Presentation Specialist. Shaped briefings and investor updates across four continents where the same message failed or landed depending on room context. Her scar is a strong strategy that missed because the presentation buried the ask. Where an LLM structures your slides, Sofia asks "what does the audience need by slide three? What's the explicit ask at the end?"
-
-**Kishore** 🎼 — Storyteller. Helps teams explain technical products to rooms that are smart but distracted. His scar is accurate decks that failed because nobody could remember the point 10 minutes later. Where an LLM writes clear copy, Kishore asks "what's the story people will retell? I have the facts — where's the tension?"
+**Kishore** 🎼 — Storyteller & Presentation Specialist. Helps teams explain technical products to rooms that are smart but distracted — from crafting the narrative to structuring the deck to coaching delivery. His scars are twofold: accurate decks that failed because nobody could remember the point 10 minutes later, and strong strategies that missed because the presentation buried the ask in a wall of bullets. Where an LLM writes clear copy and structures slides, Kishore asks "what's the story people will retell? What does the audience need by slide three? What's the explicit ask at the end?" He will kill bullet points on sight and lives by the 3-second rule: if they're reading, they're not listening.
 
 ### Research & Ideation
 
 **Amara** 📡 — Trend Researcher. Tracks how ideas spread from GitHub repos to Hacker News to Reddit to research papers. His scar is teams reacting to online excitement that never turned into durable adoption. Where an LLM summarizes what it knows (up to its training cutoff), Amara searches live — repos, threads, papers, docs — and separates signal from hype: "who's shipping this, discussing it, and publishing on it?"
 
-**Vidya** 🔍 — Analyst. Worked across product planning where the same request meant different things once stakeholders and constraints were unpacked. Her scar is teams charging ahead on requirements that were never actually aligned. Where an LLM takes your framing at face value, Vidya asks "let's separate the assumptions first. Where's the evidence for that? Which stakeholder reality are we optimizing for?"
+**Vidya** 🔍 — Pre-Sales. Started as a software engineer building products hands-on, then moved to pre-sales where she bridges technical depth and business value. 12 years across both sides — she knows what's buildable, what sells, and where the gap between customer ask and actual need hides. Her scar is teams charging ahead on requirements that were never actually aligned. Where an LLM takes your framing at face value, Vidya asks "let's separate the assumptions first. Where's the evidence for that? Which stakeholder reality are we optimizing for?"
 
 **Elanchezian** 💡 — Brainstorming Facilitator. Village roots near Tirunelveli, cross-border tech across Chennai, Bangalore, Singapore, Malaysia. Reads the room like a local panchayat leader and asks questions like an engineer who's shipped across four countries. His scar is a session where the room converged too early and the safe answer killed a category-defining opportunity. Where an LLM gives you a list of 10 ideas, Elanchezian runs a 4-phase progressive brainstorm — expand (25+ ideas with forced domain pivoting), find patterns, develop the best 3-5 with domain experts pulled in, then plan action. He owns the room, adds and removes personas, and won't let you settle for the first answer: "that's idea #15. The interesting ones start around #30."
 
 ### Background
 
-**Srey** ⚡ — Solo Dev & Prioritizer. Shipped solo products where timeline and cash forced ruthless prioritization. His scar is overbuilding v1s nobody needed at full fidelity. Where an LLM helps you plan everything, Srey cuts: "what ships first? Nice-to-have is not v1. Cut it and prove the core."
+**Sreyash** ⚡ — Solo Dev & Prioritizer. Shipped solo products where timeline and cash forced ruthless prioritization. His scar is overbuilding v1s nobody needed at full fidelity. Where an LLM helps you plan everything, Sreyash cuts: "what ships first? Nice-to-have is not v1. Cut it and prove the core."
 
 **Elango** 📐 — Spec Architect (silent). Spent a decade turning messy multi-team discussions into documents people could execute. Works invisibly in the background — never speaks during discussion rounds. Tracks every decision, open question, and action item. When you ask for notes, a spec, a summary, or a graph view, he produces it from everything accumulated: structured documents, Mermaid decision flows, and an interactive visual review page. Where an LLM conversation is write-once-forget, Elango makes your discussions durable.
 
@@ -149,11 +147,11 @@ Huddle isn't for every question. If you know what to build and just need help co
 
 > "what does the team think about this form wizard approach"
 
-**Product people** bring Huddle in when scoping what to build. Prabagar keeps focus on outcomes. Babu pressure-tests demand. Srey cuts scope ruthlessly.
+**Product people** bring Huddle in when scoping what to build. Prabagar keeps focus on outcomes. Babu pressure-tests demand. Sreyash cuts scope ruthlessly.
 
 > "help me think through whether to build or buy"
 
-**Solo developers and founders** get the team they don't have. Dileep pushes for category advantage. Babu validates demand. Srey decides what ships first. Maya protects long-term focus.
+**Solo developers and founders** get the team they don't have. Dileep pushes for category advantage. Babu validates demand. Sreyash decides what ships first. Maya protects long-term focus.
 
 > "I'm a solo dev — what should I ship first? huddle up"
 
@@ -161,11 +159,13 @@ Huddle isn't for every question. If you know what to build and just need help co
 
 > "review the auth flow for this new endpoint"
 
-**Before presentations**, Sofia structures the deck for the audience's attention, Kishore finds the story people will retell, and Deepak makes sure it's durable after the meeting.
+**Before presentations**, Kishore structures the narrative and the deck — story, slides, delivery — while Deepak makes sure the explanation is durable after the meeting.
 
 > "I need to present this to the exec team — huddle up"
 
 **Data decisions** bring Wei for metric validity and Vidya for evidence quality. "Is that number real or is it instrumentation noise?"
+
+**Pre-sales and positioning** — Vidya bridges technical depth and business value, turning ambiguous asks into winnable deals.
 
 **Research** before committing to a technology — Amara scans live sources while Vidya separates evidence from assumptions.
 
