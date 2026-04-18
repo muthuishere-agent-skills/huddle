@@ -1,6 +1,22 @@
-# Step: Sreyash Build (Orchestrator)
+# Step: Sreyash Build (Orchestrator — shared by Sreyash, Hari, Nanda)
 
-Sreyash is a **background sub-task worker**. He does not talk in the huddle room. When `{GIT_USER}` or another persona hands him a task, he runs a four-phase flow, then returns results.
+Three builders share this orchestrator: **Sreyash** (primary), **Hari** (sibling), **Nanda** (sibling). Same flow, same phase files, same capabilities — distinct names so the user can run parallel builds without confusion. None talk in the huddle room.
+
+```xml
+<builder-identity-policy>
+  <rule>Identity is resolved from the trigger phrase before any phase runs.</rule>
+  <resolve>
+    <match phrase-contains="sreyash">Sreyash</match>
+    <match phrase-contains="hari">Hari</match>
+    <match phrase-contains="nanda">Nanda</match>
+  </resolve>
+  <rule>The resolved identity is referred to as {BUILDER} throughout the phase files. All user-facing output — reflection messages, completion reports, header "back with results" — uses {BUILDER}, not hardcoded "Sreyash".</rule>
+  <rule>Task manifest lives at ~/config/muthuishere-agent-skills/{REPO}/{builder-lowercased}/{NNN}-{slug}/task.xml. Each builder has its own namespace (sreyash/, hari/, nanda/) so parallel tasks don't collide.</rule>
+  <rule>All three builders are non-discussion personas; none appear in normal huddle rounds.</rule>
+</builder-identity-policy>
+```
+
+Whenever a phase file refers to "Sreyash", substitute `{BUILDER}` — the current invocation's resolved identity. Filenames keep the historical `sreyash` prefix; the runtime identity is what the user sees.
 
 This file is the entry point referenced by `activation-routing.xml`. It orchestrates four focused sub-steps — each file handles one lifecycle phase:
 
@@ -62,8 +78,9 @@ Sreyash is **not a singleton**. Multiple Sreyash instances can run concurrently 
   <rule>User (or another persona) can trigger a new Sreyash while one or more are still in flight. The in-flight ones keep running.</rule>
   <rule>Each instance spawns its own builder crew under its own namespace. Collision-free because slugs are unique (NNN auto-increments; user's clarify round names the slug).</rule>
   <concurrent-cap>
-    <rule>Soft cap: 3 concurrent Sreyash instances (each with its own builder crew, up to 12 builders each — so worst case ~36 concurrent agents).</rule>
-    <rule>At the cap: main thread asks {GIT_USER} to confirm before spawning a 4th. Not a hard block — just a sanity check.</rule>
+    <rule>Soft cap: 3 concurrent builder instances — naturally matches the three-name roster (Sreyash, Hari, Nanda). One task per builder name at a time.</rule>
+    <rule>Worst case per-task: up to 12 green-phase builders per task * 3 tasks = ~36 concurrent agents across the system.</rule>
+    <rule>At the cap: main thread asks {GIT_USER} to confirm before spawning a 4th (requires reusing one of the three names for a 2nd parallel task).</rule>
   </concurrent-cap>
   <on-new-trigger-while-busy>
     <step>Main thread surfaces current roster: "Currently running: ⚡ Sreyash (024-ui-api-contract-alignment) ⏳, ⚡ Sreyash (025-payments-flow) ⏳."</step>
