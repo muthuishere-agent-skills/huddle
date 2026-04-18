@@ -576,29 +576,76 @@
       const participants = state.participants || [];
       const openQuestions = state.open_questions || [];
       const keyMoments = state.key_moments || [];
+      const issues = state.issues || [];
+      const challenges = state.challenges || [];
+      const evidence = state.evidence || [];
       const closed = decisions.filter((d) => d.status === "closed");
       const lastClosed = closed[closed.length - 1] || null;
 
       const evidenceMap = new Map();
+      evidence.forEach((e) => { if (e.id) evidenceMap.set(e.id, e); });
       decisions.forEach((d) => {
         (d.evidence || []).forEach((e) => {
           if (e.ref && !evidenceMap.has(e.ref)) evidenceMap.set(e.ref, e);
         });
       });
 
-      const nodes = decisions.map((d, i) => ({
-        id: d.id || `d-${i}`,
-        kind: d.status === "closed" ? "decision" : "question",
-        label: d.topic,
-        status: d.status === "closed" ? "agreed" : "open",
-        icon: d.status === "closed" ? "✅" : "❓",
-        why_it_matters: d.rationale || d.decision || d.topic,
-      }));
-
+      const nodes = [];
       const edges = [];
+
+      issues.forEach((iss, i) => {
+        const id = iss.id || `i-${i}`;
+        nodes.push({
+          id, kind: "issue", label: iss.label || iss.topic || `Issue ${i + 1}`,
+          status: "open", icon: "💡",
+          why_it_matters: iss.detail || iss.label || "Framed the discussion.",
+        });
+      });
+
       decisions.forEach((d, i) => {
-        const src = d.id || `d-${i}`;
-        (d.linked_topics || []).forEach((tgt) => edges.push({ from: src, to: tgt, relation: "informs", label: "informs" }));
+        const id = d.id || `d-${i}`;
+        nodes.push({
+          id,
+          kind: d.status === "closed" ? "decision" : "question",
+          label: d.topic,
+          status: d.status === "closed" ? "agreed" : "open",
+          icon: d.status === "closed" ? "✅" : "❓",
+          why_it_matters: d.rationale || d.decision || d.topic,
+        });
+        (d.linked_issues || []).forEach((tgt) => edges.push({ from: tgt, to: id, relation: "informs", label: "informs" }));
+        (d.linked_topics || []).forEach((tgt) => edges.push({ from: id, to: tgt, relation: "informs", label: "informs" }));
+      });
+
+      challenges.forEach((c, i) => {
+        const id = c.id || `c-${i}`;
+        nodes.push({
+          id, kind: "challenge", label: c.label || `Challenge ${i + 1}`,
+          status: c.resolved ? "resolved" : "open", icon: "⚔️",
+          why_it_matters: c.detail || c.label || "Pushback raised in discussion.",
+        });
+        if (c.targets) edges.push({ from: id, to: c.targets, relation: "challenges", label: c.by ? `${c.by} challenges` : "challenges" });
+      });
+
+      openQuestions.forEach((q, i) => {
+        const questionObj = typeof q === "string" ? { label: q } : q;
+        const id = questionObj.id || `q-${i}`;
+        nodes.push({
+          id, kind: "missing-question", label: questionObj.label || questionObj.question || `Question ${i + 1}`,
+          status: "open", icon: "❓",
+          why_it_matters: questionObj.detail || questionObj.label || questionObj.question || "Unresolved question.",
+        });
+        if (questionObj.targets) edges.push({ from: questionObj.targets, to: id, relation: "needs-answer", label: "needs answer" });
+      });
+
+      evidence.forEach((e, i) => {
+        const id = e.id || `e-${i}`;
+        nodes.push({
+          id, kind: "evidence", label: e.label || e.ref || `Evidence ${i + 1}`,
+          status: "noted", icon: "📚",
+          why_it_matters: e.detail || e.label || e.ref || "Cited in discussion.",
+          source_refs: [id],
+        });
+        (e.linked_decisions || []).forEach((tgt) => edges.push({ from: id, to: tgt, relation: "supports", label: "supports" }));
       });
 
       if (nodes.length === 0) {

@@ -37,7 +37,8 @@ This step runs as a loop — once per message from `{GIT_USER}`.
     <rule>Do NOT write huddle-state.json or the huddle note after each exchange. Fire huddle_writer.py in background on decisions and milestones only.</rule>
     <rule>Raw event files accumulate in {HUDDLE_DIR}/raw/. Synthesis into huddle-state.json and .md happens only on explicit ask or wrap-up.</rule>
     <rule>huddle-state.json is the only synthesized state file. No graph-raw.json.</rule>
-    <rule>On synthesis, build complete: decisions[], participants[], key_moments[], open_questions[], action_items[], current_topic, latest_summary, active_personas.</rule>
+    <rule>On synthesis, build complete: decisions[], participants[], key_moments[], open_questions[], action_items[], issues[], challenges[], evidence[], current_topic, latest_summary, active_personas. Issues/challenges/evidence are extracted from each decision's rationale prose + conversation context at synthesis time — they are NOT written as separate raw events.</rule>
+    <rule>When writing a raw decision event, the rationale field is a short prose paragraph (3-8 sentences) that names the issues that framed the choice, the personas who challenged it and what they said, and any evidence or authors/refs cited. Write prose, not a typed envelope. Synthesis will extract structure from it later.</rule>
     <rule>When a decision is recorded in a raw event, include personas involved in the event JSON.</rule>
     <rule>Generate graph review only when a visual review is needed — not on every turn.</rule>
   </state-rules>
@@ -269,7 +270,15 @@ When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph revi
 
 1. Read all `{HUDDLE_DIR}/raw/*.json` files, sorted by filename (timestamp order)
 2. Combine raw events with conversation context to build the full picture
-3. Write `huddle-state.json` with complete: `decisions[]`, `participants[]`, `key_moments[]`, `open_questions[]`, `action_items[]`, `current_topic`, `latest_summary`, `active_personas`
+3. Write `huddle-state.json` with complete: `decisions[]`, `participants[]`, `key_moments[]`, `open_questions[]`, `action_items[]`, `issues[]`, `challenges[]`, `evidence[]`, `current_topic`, `latest_summary`, `active_personas`
+
+   For each decision, parse its `rationale` prose (and the surrounding conversation context) to extract:
+   - **issues[]**: `{id, label, detail, raised_by}` — problems or framings the decision addresses. Link back via `linked_issues` on the decision.
+   - **challenges[]**: `{id, label, detail, by, targets}` — pushback from personas. `by` is a persona id; `targets` is a decision id.
+   - **evidence[]**: `{id, label, ref, detail, linked_decisions}` — cited authors, frameworks, or URLs. `ref` is the canonical source (e.g., "Rumelt — Good Strategy/Bad Strategy"); `linked_decisions` is the list of decision ids it supports.
+   - **open_questions[]**: promote from strings to `{id, label, targets}` objects where possible. `targets` is the decision or issue id the question relates to.
+
+   Dedupe across decisions. If rationale prose doesn't mention any of these, leave the array empty — do not fabricate.
 4. Write today's huddle note `{HUDDLE_NOTE_FILE}` in the Meeting Document Shape below
 5. Delete all files in `{HUDDLE_DIR}/raw/` (they've been synthesized)
 6. Do NOT auto-open the graph review page. Only run `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}` when {GIT_USER} explicitly asks to see the graph.
