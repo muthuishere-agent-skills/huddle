@@ -112,4 +112,4 @@ After the spec + red tests are on disk, Sreyash groups the Requirements into wor
 
 ## Handoff
 
-With work units planned in the manifest, proceed to `step-sreyash-process.md`.
+With work units planned in the manifest, proceed to `step-sreyash-3-process.md`.

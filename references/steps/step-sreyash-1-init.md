@@ -1,6 +1,6 @@
 # Step: Sreyash — Init (detect + clarify)
 
-First phase of the Sreyash build sub-task. Handles trigger, environment detection, clarify round, and task manifest creation. On completion, hands off to `step-sreyash-spec.md`.
+First phase of the Sreyash build sub-task. Handles trigger, environment detection, clarify round, and task manifest creation. On completion, hands off to `step-sreyash-2-spec.md`.
 
 ## Trigger
 
@@ -242,7 +242,7 @@ Task manifests live skill-private (not in the repo). Repos that use `flat-md` ha
   </context>
 
   <work-units>
-    <!-- Filled in during step-sreyash-spec.md after Red phase. -->
+    <!-- Filled in during step-sreyash-2-spec.md after Red phase. -->
   </work-units>
 
   <artifacts>
@@ -257,4 +257,4 @@ Task manifests live skill-private (not in the repo). Repos that use `flat-md` ha
 
 ## Handoff
 
-When manifest is written and user has said "go", proceed to `step-sreyash-spec.md`.
+When manifest is written and user has said "go", proceed to `step-sreyash-2-spec.md`.
