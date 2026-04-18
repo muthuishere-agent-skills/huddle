@@ -20,13 +20,35 @@ That's not an answer. That's a tension. Tensions are where decisions get made.
 
 ## Who's in the room
 
-**Discussion voices (18)** — each with a scar/win identity and named influences (Rumelt, Porter, Hickey, Tufte, Duarte, MEDDIC, DORA, Fowler, and more):
+**Discussion voices (18)** — each carries a scar/win identity and named influences (Rumelt, Porter, Hickey, Tufte, Duarte, MEDDIC, DORA, Fowler, and more):
 
-🧠 Maya (Strategy) · 🖥️ Luca (Frontend/Mobile/Games) · ⚙️ Shaama (Backend) · 🎨 Suna (Design) · 📋 Prabagar (PM) · 🔒 Senthil (Security) · 🎯 Babu (Demand Reality) · 🔥 Dileep (Founder) · 🧪 Nina (Tester) · 🏛️ Suren (Architect) · 🔍 Vidya (Pre-Sales) · 📝 Deepak (Tech Writer) · 📊 Wei (Data Analyst) · 🎼 Kishore (Storyteller) · 📡 Amara (Trend Researcher) · 💡 Elanchezian (Brainstorming) · 📐 Elango (Spec — silent background state worker)
+| | Name | Role | What they do that an LLM doesn't |
+|---|---|---|---|
+| 🧠 | Maya | Strategy | Diagnosis before plan; names the non-goals |
+| 🖥️ | Luca | Frontend / Mobile / Games | Device reality — not the mock |
+| ⚙️ | Shaama | Backend | Failure modes, rollback, anti-ceremony |
+| 🎨 | Suna | Design | User jobs, not team mental models |
+| 📋 | Prabagar | PM | Value metric, measured vs borrowed pricing |
+| 🔒 | Senthil | Security | Blast radius, trust boundaries |
+| 🎯 | Babu | Demand Reality | Names the actual human; kills borrowed benchmarks |
+| 🔥 | Dileep | Founder Visionary | Distribution-first, SEO, wartime instincts |
+| 🧪 | Nina | Tester (QA + E2E) | Angry-path scenarios; docker-compose/testcontainers |
+| 🏛️ | Suren | Architect | Capacity math, DORA, Team Topologies, boring tech |
+| 🔍 | Vidya | Pre-Sales | MEDDPICC, economic buyer, paper process |
+| 📝 | Deepak | Tech Writer | Docs that survive handoffs; auto-scans the repo |
+| 📊 | Wei | Data Analyst | Dashboard design; denominator discipline |
+| 🎼 | Kishore | Storyteller & Presentation | Kills bullet points; narrative + deck craft |
+| 📡 | Amara | Trend Researcher | Live ecosystem scanning; signal vs hype |
+| 💡 | Elanchezian | Brainstorming | 4-phase progressive brainstorm, room control |
+| 📐 | Elango | Spec Architect (silent) | Background state worker; synthesizes notes/specs/graphs |
 
 **Background builders (3)** — you always address Sreyash; overflow delegates transparently:
 
-⚡ **Sreyash** (primary) · 🛠️ **Hari** (sibling) · 🧰 **Vinish** (sibling)
+| | Name | Role | Triggered when |
+|---|---|---|---|
+| ⚡ | Sreyash | Background builder (primary) | You say "Sreyash, build X" and he's free |
+| 🛠️ | Hari | Sibling overflow | Sreyash is busy |
+| 🧰 | Vinish | Sibling overflow | Sreyash and Hari are both busy |
 
 Hand a task: *"Sreyash, build the auth flow."* He writes an OpenSpec-style spec, runs TDD red→green→refactor, spawns up to 12 named parallel workers (harsh-frontend-types, mohan-api-validation, leo-rename-sweep, …), and returns with artifacts. If he's busy, Hari or Vinish picks up — the orchestrator tells you who.
 
