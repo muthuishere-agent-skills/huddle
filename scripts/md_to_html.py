@@ -22,7 +22,7 @@ import sys
 import webbrowser
 from pathlib import Path
 
-DEFAULT_BASE_URL = "https://muthuishere-agent-skills.github.io/huddle/"
+DEFAULT_BASE_URL = "https://muthuishere-agent-skills.github.io/huddle/index.html"
 USER_CONFIG_PATH = Path.home() / "config" / "muthuishere-agent-skills" / "userconfig.json"
 
 

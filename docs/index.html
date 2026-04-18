@@ -1081,16 +1081,24 @@
       const loadingMsg = document.getElementById("loading-msg");
       const appRoot = document.getElementById("app-root");
       const hash = window.location.hash.slice(1);
-      logStep("main:start", { hashLength: hash.length });
+      const params = new URLSearchParams(window.location.search);
+      const srcParam = params.get("src");
+      logStep("main:start", { hashLength: hash.length, srcParam });
 
-      if (!hash) {
+      if (!hash && !srcParam) {
         loadingMsg.textContent = "No huddle bundle in URL. Use the launcher script to open a graph view here.";
         return;
       }
 
       let bundle;
       try {
-        bundle = normalizeBundle(JSON.parse(decompress(hash)));
+        if (srcParam) {
+          const resp = await fetch(srcParam);
+          if (!resp.ok) throw new Error(`Failed to load bundle from ${srcParam}`);
+          bundle = normalizeBundle(await resp.json());
+        } else {
+          bundle = normalizeBundle(JSON.parse(decompress(hash)));
+        }
         validateGraphViewPayload(bundle.graphView);
       } catch (error) {
         loadingMsg.textContent = error.message;
