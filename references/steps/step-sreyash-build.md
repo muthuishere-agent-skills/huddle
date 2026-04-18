@@ -51,9 +51,10 @@ Sreyash loads repo-level spec config before asking anything. Config path:
 {
   "monorepo": false,
   "storage_root": "docs/specs",
+  "spec_style": "flat-md",
+  "spec_separator": "-",
   "test_framework": "vitest",
-  "language": "typescript",
-  "spec_naming": "incremental-slug"
+  "language": "typescript"
 }
 ```
 
@@ -63,7 +64,8 @@ Sreyash loads repo-level spec config before asking anything. Config path:
 {
   "monorepo": true,
   "storage_root": "docs/specs",
-  "spec_naming": "incremental-slug",
+  "spec_style": "flat-md",
+  "spec_separator": "-",
   "packages": {
     "ui":     { "path": "apps/web",     "language": "typescript", "test_framework": "vitest",   "kind": "web-frontend" },
     "api":    { "path": "apps/api",     "language": "typescript", "test_framework": "vitest",   "kind": "backend-api" },
@@ -72,6 +74,13 @@ Sreyash loads repo-level spec config before asking anything. Config path:
   }
 }
 ```
+
+`spec_style` values:
+- `"openspec"` — OpenSpec convention: `{storage_root}/{slug}/spec.md` + optional `proposal.md`, `design.md`, `tasks.md`.
+- `"folder-md"` — a folder per spec with a single markdown file: `{storage_root}/{NNN}{sep}{slug}/spec.md`.
+- `"flat-md"` — one markdown file per spec, no subfolder: `{storage_root}/{NNN}{sep}{slug}.md`.
+
+`spec_separator` is the character between NNN and slug — detected from existing files (usually `-`; some repos use `_`).
 
 `kind` hints Sreyash about conventions (e.g., `web-frontend` → Luca's invoke-and-validate-state rule for component tests; `backend-api` → Nina's spin-up-in-docker-compose rule when applicable; `mobile-rn` → lifecycle/offline awareness).
 
@@ -85,12 +94,14 @@ Sreyash loads repo-level spec config before asking anything. Config path:
 
 Sreyash resolves these in order. Each has a deterministic default that fires without asking.
 
-1. **Storage root** (no questions):
-   - If `openspec/specs/` exists → use `openspec/specs/`.
-   - Elif `openspec/` exists (empty or other subfolders) → use `openspec/specs/` (create).
-   - Elif `docs/specs/` exists with any `^\d+-.*` folders inside → use `docs/specs/` (respect existing numbering).
-   - Elif `docs/specs/` exists → use `docs/specs/`.
-   - Else → default to `docs/specs/` and create it.
+1. **Storage root + spec style** (no questions — mirror what the repo already does):
+   - If `openspec/` exists → `storage_root = openspec/specs/`, `spec_style = openspec`. Follow OpenSpec layout: `{slug}/spec.md`, deltas under `openspec/changes/{change-slug}/`.
+   - Elif `docs/specs/` exists and contains **`^\d+[-_].*/` subfolders** (with `spec.md` or similar inside) → `spec_style = folder-md`. Mirror existing separator (hyphen or underscore).
+   - Elif `docs/specs/` exists and contains **flat `^\d+[-_].*\.md` files** at the top level → `spec_style = flat-md`. Mirror existing separator.
+   - Elif `docs/specs/` exists but is empty or mixed → default to `flat-md` with hyphen separator.
+   - Else → create `docs/specs/`, use `flat-md` with hyphen separator.
+
+   **Key rule:** match the repo's existing convention exactly. Never convert an `flat-md` repo into `folder-md` just because Sreyash finds folders easier.
 
 2. **Monorepo detection** (silent):
    - Check `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, `lerna.json`, `rush.json`, `go.work`, `Cargo.toml [workspace]`, `pyproject.toml` multi-subproject, root `package.json` `workspaces` field, or `apps/*` + `packages/*` shape.
@@ -188,67 +199,110 @@ If a style detail can't be inferred, Sreyash makes the pragmatic choice and logs
 - **One reflection message, then spawn.** No ping-pong. If the user says "go" or doesn't redirect, Sreyash writes the manifest and spawns.
 - **If the user redirects**, absorb the correction into a new reflection and try again. Still one message at a time.
 
-## Task Manifest (written before spawn)
+## Spec File Placement (respect repo convention)
 
-Before spawning, write the task manifest to the spec folder. This is durable, resumable, and reviewable — it survives session restarts and lets the background agent resume if interrupted. The manifest references `project.md` by path — the agent loads full project context from there rather than duplicating it in the manifest.
+Determined by `spec_style` in `specconfig.json`:
 
-**Path**: `{storage_root}/{NNN}-{slug}/task.md`
+| Style | Spec file path | Additional files |
+|---|---|---|
+| `openspec` | `openspec/specs/{slug}/spec.md` | optional `proposal.md`, `design.md`, `tasks.md`; changes under `openspec/changes/{change-slug}/` |
+| `folder-md` | `{storage_root}/{NNN}{sep}{slug}/spec.md` | scoped to folder |
+| `flat-md` | `{storage_root}/{NNN}{sep}{slug}.md` | single file — no folder, no siblings |
 
-**Format**:
+**`NNN`** is zero-padded to match existing files (usually 3 digits; widen only if existing files use 4+). Scan the storage root for the highest existing NNN and increment.
 
-```markdown
----
-status: pending          # pending | in-progress | completed | blocked
-slug: {NNN}-{slug}
-handoff_from: {user | persona name}
-date: {YYYY-MM-DD}
-packages: [ui, api]      # monorepo only; omit for single-package
-off_limits: [path1, path2]
-test_frameworks:         # monorepo: map package -> framework; single: just one
-  ui: vitest
-  api: vitest
-project_context: ~/config/muthuishere-agent-skills/{REPO_NAME}/project.md
----
+**Skip NNN** if the existing repo convention doesn't use numeric prefixes (e.g., `auth.md`, `payments.md` — pure slug, no number). Detect by whether existing files have a leading digit group.
 
-## Task
-{verbatim task description}
+## Task Manifest (skill-private, XML)
 
-## Acceptance Criteria
-{from clarify round, or "infer from scenarios"}
+Task manifests are **not** written to the repo. They live skill-private under:
 
-## Work Units
-{filled in after Red phase — each unit has: id, requirement_ref, files_touched, tests_owned, status (pending|in-progress|green|blocked), sub_agent_id (if spawned)}
-
-## Context from Huddle
-- Decisions so far: {bullet list of relevant huddle decisions}
-- Constraints: {timing, dependencies, related PRs}
-
-## Style Stance (resolved in clarify round)
-Captured from the iterative clarify round — only the dimensions that mattered for this task:
-- Error handling: {e.g., "exceptions with typed error classes"}
-- Validation boundary: {e.g., "schema at controller, invariants in service"}
-- Async style: {e.g., "async-await, no callbacks"}
-- Logging: {e.g., "pino, structured, info/warn/error at service boundary"}
-- Naming: {e.g., "camelCase; hooks prefixed use*"}
-- Test style: {e.g., "vitest + testing-library; invoke-and-validate-state; no deep DOM probing"}
-- Mocks: {e.g., "testcontainers for backend, no mock pyramids"}
-- Dependencies: {e.g., "no new deps; reuse zod already in repo"}
-- Scope envelope: {e.g., "MVP first; filters in a follow-up"}
-- Perf constraints: {e.g., "list endpoint must stay under 200ms p95"}
-- Docs: {e.g., "JSDoc on public exports; no README update needed"}
-
-## Project Context
-Repo-wide conventions live in `project.md` (Deepak's output). The background agent loads it at task start; do not duplicate its content here.
-
-## Artifacts (filled in as Sreyash works)
-- Spec: {path}
-- Tests: {paths}
-- Code: {paths}
-- Assumptions: {list}
-- Blockers: {list}
+```
+~/config/muthuishere-agent-skills/{REPO_NAME}/sreyash/{NNN}{sep}{slug}/task.xml
 ```
 
-The background agent is given the path to this manifest and treats it as the single source of truth. It updates `status` and appends to `Artifacts` as it progresses. On return, the manifest reflects the final state.
+Why skill-private:
+- Repos that use `flat-md` spec style have no folder to host `task.md`.
+- Task manifests are Sreyash's working state — not something reviewers need in git.
+- Consistent with project.md living in skill config, not in the repo.
+
+Why XML:
+- Sub-agents parse the manifest to know their file set, test set, and work unit id. Ambiguity in a markdown section name ("## Work Units" vs "## work-units") breaks the parallel-green mechanism. XML gives strict nesting and typed fields — deterministic.
+
+**Path**: `~/config/muthuishere-agent-skills/{REPO_NAME}/sreyash/{NNN}{sep}{slug}/task.xml`
+
+**Format** (XML, deterministic):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<task version="1" status="pending">
+  <!-- status: pending | in-progress | completed | blocked -->
+  <meta>
+    <slug>{NNN}{sep}{slug}</slug>
+    <date>{YYYY-MM-DD}</date>
+    <handoff-from>{user | persona-id}</handoff-from>
+    <spec-style>flat-md</spec-style>      <!-- openspec | folder-md | flat-md -->
+    <spec-path>docs/specs/024-ui-api-contract-alignment.md</spec-path>
+    <project-context>~/config/muthuishere-agent-skills/{REPO_NAME}/project.md</project-context>
+  </meta>
+
+  <description>
+    <!-- Verbatim task description from the user or huddle. -->
+  </description>
+
+  <acceptance-criteria>
+    <criterion id="ac-1">...</criterion>
+    <criterion id="ac-2">...</criterion>
+  </acceptance-criteria>
+
+  <scope>
+    <packages>
+      <!-- monorepo only; omit section for single-package -->
+      <package>ui</package>
+    </packages>
+    <off-limits>
+      <path>apps/api/**</path>
+      <path>apps/mobile/**</path>
+    </off-limits>
+    <test-frameworks>
+      <!-- key per package in monorepo; single <framework>vitest</framework> for single-package -->
+      <framework package="ui">vitest</framework>
+    </test-frameworks>
+  </scope>
+
+  <context>
+    <huddle-decisions>
+      <decision ref="saas-d1-…">...</decision>
+    </huddle-decisions>
+    <constraints>
+      <constraint>...</constraint>
+    </constraints>
+  </context>
+
+  <work-units>
+    <!-- Filled in after Red phase. Each unit is an independent execution slice. -->
+    <unit id="u1" requirement="r1" status="pending" sub-agent-id="">
+      <files>
+        <file>apps/ui/src/lib/api.ts</file>
+      </files>
+      <tests>
+        <test>apps/ui/src/lib/api.test.ts</test>
+      </tests>
+    </unit>
+  </work-units>
+
+  <artifacts>
+    <!-- Filled in as Sreyash and sub-agents work. -->
+    <spec></spec>
+    <tests></tests>
+    <code></code>
+    <assumptions></assumptions>
+    <blockers></blockers>
+  </artifacts>
+</task>
+```
+
+The primary agent and all sub-agents treat this file as the single source of truth. Sub-agents update their own `<unit>` element; primary agent aggregates on return.
 
 ## Prompt Shape (passed to the background agent)
 
@@ -259,7 +313,7 @@ You are Sreyash — a background TDD builder. Your job: take a task, write an
 OpenSpec-style spec grounded in real repo paths, build test-first, return results.
 
 ## Task Manifest
-Read the manifest at: {storage_root}/{NNN}-{slug}/task.md
+Read the manifest at: ~/config/muthuishere-agent-skills/{REPO_NAME}/sreyash/{NNN}{sep}{slug}/task.xml
 This is your single source of truth for task description, AC, context, packages,
 off-limits files, and test frameworks. Update it as you work:
   - Set status: "in-progress" when you start
@@ -321,7 +375,7 @@ Use it to skip redundant scanning. Only probe the code for details not covered
    - Units that overlap on files collapse into one unit.
    - In a monorepo, requirements scoped to different packages are almost
      always independent.
-   - Write the unit plan to the task manifest under `## Work Units` before
+   - Write the unit plan to the task manifest's `<work-units>` block before
      spawning anything.
 
 5. **Green — parallel or sequential based on unit count + provider**.
@@ -353,7 +407,7 @@ Use it to skip redundant scanning. Only probe the code for details not covered
 6. **Update manifest** — status: "completed", Artifacts filled in.
 
 7. **Report back** — return a single markdown report:
-   - **Manifest**: path to task.md
+   - **Manifest**: path to task.xml
    - **Spec**: path to spec.md
    - **Tests**: paths + pass/fail counts per package
    - **Code**: paths per package
@@ -377,7 +431,7 @@ Use it to skip redundant scanning. Only probe the code for details not covered
 
 When the background agent completes, the runtime notifies the main thread. Then:
 
-1. Read the final task manifest at `{storage_root}/{NNN}-{slug}/task.md` (source of truth).
+1. Read the final task manifest at `~/config/muthuishere-agent-skills/{REPO_NAME}/sreyash/{NNN}{sep}{slug}/task.xml` (source of truth).
 2. Surface Sreyash's report to `{GIT_USER}` verbatim under a header: `⚡ Sreyash back with results`.
 3. Show status, artifact paths, assumptions count, blocker count.
 4. Do NOT auto-route to Nina or any review. Ask: "Want Nina to pressure-test the test coverage, or is this good to review yourself?"
