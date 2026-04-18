@@ -435,19 +435,13 @@
       </section>
 
       <section id="graph-view" class="view active">
-        <section class="summary-grid">
-          <article class="panel">
-            <h2>Main question</h2>
-            <div class="question-block">
-              <strong id="main-question"></strong>
-              <p id="decision-why"></p>
-            </div>
-          </article>
-          <article class="panel">
-            <h2>What stands out</h2>
-            <div id="summary-chips" class="chips"></div>
-          </article>
-        </section>
+        <article class="panel" style="margin-bottom:20px;">
+          <h2>Main question</h2>
+          <div class="question-block">
+            <strong id="main-question"></strong>
+            <p id="decision-why"></p>
+          </div>
+        </article>
 
         <section class="layout">
           <aside class="side-stack">
@@ -455,18 +449,6 @@
               <h2>People involved</h2>
               <p>Who most shaped the room and how.</p>
               <div id="participants" class="list"></div>
-            </article>
-
-            <article class="panel">
-              <h2>Key moments</h2>
-              <p>Compressed evolution, not every raw event.</p>
-              <div id="timeline" class="list"></div>
-            </article>
-
-            <article class="panel">
-              <h2>Evidence</h2>
-              <p>What grounded the room.</p>
-              <div id="sources" class="list"></div>
             </article>
           </aside>
 
@@ -759,7 +741,8 @@
     function renderSummary(view) {
       document.getElementById("main-question").textContent = view.main_question;
       document.getElementById("decision-why").textContent = `${view.decision} ${view.decision_why}`;
-      document.getElementById("summary-chips").innerHTML = (view.what_stands_out || []).map((item) =>
+      const chips = document.getElementById("summary-chips");
+      if (chips) chips.innerHTML = (view.what_stands_out || []).map((item) =>
         `<span class="chip">${escapeHtml(item.icon)} ${escapeHtml(item.text)}</span>`
       ).join("");
     }
@@ -775,7 +758,8 @@
 
     function renderTimeline(view) {
       const items = view.key_moments || [];
-      document.getElementById("timeline").innerHTML = items.map((item) => `
+      const sideTimeline = document.getElementById("timeline");
+      if (sideTimeline) sideTimeline.innerHTML = items.map((item) => `
         <div class="list-card">
           <strong>${escapeHtml(item.icon)} ${escapeHtml(item.title)}</strong>
           <small>${escapeHtml(item.detail)}</small>
@@ -797,7 +781,9 @@
     }
 
     function renderSources(view) {
-      document.getElementById("sources").innerHTML = (view.evidence || []).map((source) => {
+      const target = document.getElementById("sources");
+      if (!target) return;
+      target.innerHTML = (view.evidence || []).map((source) => {
         const ref = source.ref || "";
         const label = source.label || autoLabelFromRef(ref) || ref;
         const favicon = faviconUrl(ref);
