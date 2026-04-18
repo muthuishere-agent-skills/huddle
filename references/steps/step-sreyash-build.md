@@ -378,37 +378,78 @@ Use it to skip redundant scanning. Only probe the code for details not covered
    - Write the unit plan to the task manifest's `<work-units>` block before
      spawning anything.
 
-5. **Green — Sreyash manages a named builder crew, parallel where possible**.
+5. **Green — Sreyash manages a dynamically-named builder crew, parallel as wide as the work allows**.
 
-   ### The builder crew (Sreyash's direct reports)
+   ### Dynamic builder naming
 
-   Sreyash doesn't do green-phase implementation himself anymore. He
-   delegates to named builders, each spawned as a background `Agent` with
-   `run_in_background: true`. Each has a light specialization so the user
-   can tell at a glance who's doing what:
+   Sreyash doesn't do green-phase implementation himself. He spawns one
+   builder per work unit, **named dynamically** so the user can see at a
+   glance what each builder owns. Pattern:
 
-   - 🔨 **Harsh** — strict AC enforcer. Writes the minimum code to turn
-     red tests green. Refuses to drift from the Requirement. Best for:
-     pure implementation of a well-scoped Requirement with unambiguous
-     tests.
-   - 🧵 **Ishita** — thorough implementer. Handles edge cases, error
-     paths, validation branches. Adds implied tests the spec didn't
-     enumerate. Best for: Requirements that include error handling,
-     boundary conditions, or data validation.
-   - ⚡ **Rohan** — fast iterator. Small diffs, post-green cleanup,
-     refactor, file renames. Best for: mechanical changes, type-rename
-     sweeps, snake_case → camelCase conversions, dead-code removal.
+   ```
+   {base-name}-{scope-slug}
+   ```
+
+   Examples the user will see on screen:
+   - `harsh-frontend-types` — strict implementer on frontend type defs
+   - `mohan-auth-validation` — thorough implementer on auth edge cases
+   - `leo-camelcase-sweep` — fast iterator on naming convention sweep
+   - `diego-api-contract` — any specialization on API contract work
+   - `yuki-db-migration` — focused builder on a migration
+   - `omar-component-tests` — detail-oriented on test writing
+
+   **Base-name pool** (globally memorable, short, diverse — pick
+   round-robin per task so the user sees variety):
+   `harsh`, `mohan`, `leo`, `diego`, `yuki`, `omar`, `lars`, `kai`,
+   `noor`, `chen`, `zara`, `nikos`. Add new memorable short names freely
+   if the task spawns more than 12 builders.
+
+   **Scope-slug** comes from the unit's Requirement domain — the most
+   identifying part of the files or behavior it owns (`frontend`, `auth`,
+   `types`, `migration`, `tests`, `cleanup`, `api-contract`, etc.). Keep
+   it 1-3 hyphen-separated words.
+
+   **Light role tint on base name** (optional, not enforced):
+   - `harsh-*` — strict AC enforcer: minimum code to turn red tests green.
+   - `mohan-*` — thorough: edge cases, error paths, implied tests.
+   - `leo-*` — fast iterator: small diffs, cleanup, refactor, mechanical sweeps.
+   - Others (`diego`, `yuki`, `omar`, `lars`, `kai`, `noor`, `chen`,
+     `zara`, `nikos`) — general-purpose; Sreyash picks based on scope fit
+     or round-robin when role doesn't matter.
 
    ### Assignment protocol
 
+   - **Concurrency cap: up to 12 in flight**. Claude Code handles many
+     concurrent background agents. Practical ceiling is the point where
+     status updates become noisy — Sreyash caps at 12 by default, lower
+     if the work is tightly coupled.
    - **If ≥ 2 independent units AND host supports concurrent background
-     agents** (Claude Code: yes via `Agent` + `run_in_background: true`):
-     Sreyash assigns each unit to the best-fit builder and spawns all of
-     them concurrently, up to ≤ 4 in flight.
-   - **If 1 unit or host lacks concurrency**: Sreyash assigns to one
-     builder and runs sequentially.
-   - If there are more units than builders (rare), Sreyash queues the
-     extras; a builder takes the next unit after its first finishes.
+     agents**: spawn one builder per unit up to the cap, all at once.
+   - **If more units than the cap**: spawn the first N, queue the rest;
+     a freed builder picks up the next unit.
+   - **If 1 unit or host lacks concurrency**: spawn one builder
+     sequentially.
+
+   ### Real example
+
+   For a 12-unit feature touching frontend + backend + mobile + docs:
+   ```
+   harsh-frontend-types      → unit u1: type defs in apps/web/src/lib/api.ts
+   mohan-frontend-date       → unit u2: date parsing edge cases in ReviewCard
+   leo-frontend-rename       → unit u3: snake_case → camelCase sweep
+   diego-api-contract        → unit u4: backend response shape alignment
+   yuki-api-validation       → unit u5: request schema tightening
+   omar-mobile-sync          → unit u6: mobile client type alignment
+   lars-mobile-tests         → unit u7: mobile component tests
+   kai-backend-tests         → unit u8: backend contract tests
+   noor-migration            → unit u9: DB column rename migration
+   chen-openapi-spec         → unit u10: OpenAPI spec regen
+   zara-integration-tests    → unit u11: cross-service integration tests
+   nikos-changelog-update    → unit u12: CHANGELOG + docs sync
+   ```
+
+   All 12 run concurrently. Sreyash announces the roster, then reports
+   per-builder status as they land.
 
    ### Sub-agent prompt shape
 
