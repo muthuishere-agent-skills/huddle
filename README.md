@@ -20,7 +20,7 @@ That's not an answer. That's a tension. Tensions are where decisions get made.
 
 ## Who's in the room
 
-**Discussion voices (18)** — each carries a scar/win identity and named influences (Rumelt, Porter, Hickey, Tufte, Duarte, MEDDIC, DORA, Fowler, and more):
+21 personas — each carries a scar/win identity and named influences (Rumelt, Porter, Hickey, Tufte, Duarte, MEDDIC, DORA, Fowler, House, and more). Some talk in the room, some take sub-tasks, some work silently.
 
 | | Name | Role | What they do that an LLM doesn't |
 |---|---|---|---|
@@ -39,20 +39,14 @@ That's not an answer. That's a tension. Tensions are where decisions get made.
 | 📊 | Wei | Data Analyst | Dashboard design; denominator discipline |
 | 🎼 | Kishore | Storyteller & Presentation | Kills bullet points; narrative + deck craft |
 | 📡 | Amara | Trend Researcher | Live ecosystem scanning; signal vs hype |
+| 🔬 | Vel | Infrastructure Diagnostician | Differential diagnosis with parallel scouts; names root cause and layer |
 | 💡 | Elanchezian | Brainstorming | 4-phase progressive brainstorm, room control |
-| 📐 | Elango | Spec Architect (silent) | Background state worker; synthesizes notes/specs/graphs |
+| 📐 | Elango | Spec Architect | Silent background state; synthesizes notes/specs/graphs on demand |
+| ⚡ | Sreyash | Builder | Spec + TDD + parallel build crew; "Sreyash, build this" |
+| 🛠️ | Hari | Builder (sibling) | Picks up when Sreyash is busy |
+| 🧰 | Harshvardhan | Builder (sibling) | Picks up when Sreyash and Hari are both busy |
 
-**Background builders (3)** — you always address Sreyash; overflow delegates transparently:
-
-| | Name | Role | Triggered when |
-|---|---|---|---|
-| ⚡ | Sreyash | Background builder (primary) | You say "Sreyash, build X" and he's free |
-| 🛠️ | Hari | Sibling overflow | Sreyash is busy |
-| 🧰 | Harshvardhan | Sibling overflow | Sreyash and Hari are both busy |
-
-
-
-Hand a task: *"Sreyash, build the auth flow."* He writes an OpenSpec-style spec, runs TDD red→green→refactor, spawns up to 12 named parallel workers (harsh-frontend-types, mohan-api-validation, leo-rename-sweep, …), and returns with artifacts. If he's busy, Hari or Harshvardhan picks up — the orchestrator tells you who.
+Hand a task: *"Sreyash, build the auth flow."* He writes an OpenSpec-style spec, runs TDD red→green→refactor, spawns up to 12 named parallel workers, and returns with artifacts. Three parallel tasks max — overflow delegates transparently.
 
 ## Eight modes
 
@@ -71,6 +65,7 @@ On demand, Elango synthesizes an interactive graph view — 💡 issues, ✅ dec
 - About to ship and want someone to find the failure path you missed.
 - Need to brainstorm past idea #15 into where breakthroughs live.
 - Want the discussion to survive — decisions, rationale, rejected paths, resumable.
+- Something is broken in prod and you need root cause, not guesses.
 - Want to hand the build off to Sreyash while you keep moving.
 
 Use Claude directly for straightforward coding; use Huddle when the shape of the question matters more than the answer.

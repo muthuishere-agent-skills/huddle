@@ -39,13 +39,13 @@ Three things happen:
 
 1. **Huddle reads your repo.** Git user, branch, recent commits, modified files, open PRs. It knows what you've been working on.
 
-2. **Two personas are picked** based on the topic — not randomly, not all twenty-two. The artifact owner first, then a domain expert, then maybe one counterweight if it sharpens the decision. Small room by default.
+2. **Two personas are picked** based on the topic — not randomly, not all twenty-one. The artifact owner first, then a domain expert, then maybe one counterweight if it sharpens the decision. Small room by default.
 
 3. **They give short, opinionated takes** grounded in your code, disagree with each other where it matters, surface the core tension — and then stop. They wait for you.
 
 You make the call. The decision is recorded as yours. Then you say what's next — or wrap up and resume tomorrow with full context.
 
-## The 22 personas — and what they actually do that an LLM doesn't
+## The 21 personas — and what they actually do that an LLM doesn't
 
 An LLM can roleplay any perspective. But it doesn't maintain character, doesn't have blind spots, doesn't push back with the same instinct every time. These personas do.
 
