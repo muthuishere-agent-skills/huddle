@@ -27,6 +27,7 @@ Here's what that looks like in practice:
 | "Here are the security considerations" as a bullet point | Senthil asks "who controls that input?" and won't move on until you answer |
 | One conversation, then gone | Elango silently tracks every decision in the background and produces specs, notes, and decision graphs on demand |
 | "Here's how to implement it" | You hand the build to Sreyash — he spawns a background crew, writes spec + tests + code, reports back |
+| "Check your configuration" when something breaks | Vel runs differential diagnosis with parallel scouts, names root cause and layer, hands fix to Sreyash with a failing repro test |
 
 ## How it works
 
@@ -38,17 +39,19 @@ Three things happen:
 
 1. **Huddle reads your repo.** Git user, branch, recent commits, modified files, open PRs. It knows what you've been working on.
 
-2. **Two personas are picked** based on the topic — not randomly, not all eighteen. The artifact owner first, then a domain expert, then maybe one counterweight if it sharpens the decision. Small room by default.
+2. **Two personas are picked** based on the topic — not randomly, not all twenty-one. The artifact owner first, then a domain expert, then maybe one counterweight if it sharpens the decision. Small room by default.
 
 3. **They give short, opinionated takes** grounded in your code, disagree with each other where it matters, surface the core tension — and then stop. They wait for you.
 
 You make the call. The decision is recorded as yours. Then you say what's next — or wrap up and resume tomorrow with full context.
 
-## The 18 personas + 3 background builders — and what they actually do that an LLM doesn't
+## The 21 personas — and what they actually do that an LLM doesn't
 
 An LLM can roleplay any perspective. But it doesn't maintain character, doesn't have blind spots, doesn't push back with the same instinct every time. These personas do.
 
 Each one was designed around a real working scar — a failure they carry that shapes how they think. Their voices are deepened with named thinker references (Rumelt, Porter, Hickey, Tufte, Duarte, MEDDIC, DORA, Fowler, and more) so their challenges land with force, not as generic LLM output.
+
+Some personas talk in the room. Some take over for a sub-task (brainstorming, project docs, diagnostics, building). Some work silently in the background. They're all part of the same team.
 
 ### Technical
 
@@ -84,6 +87,10 @@ Each one was designed around a real working scar — a failure they carry that s
 
 **Kishore** 🎼 — Storyteller & Presentation Specialist. Duarte, Garr Reynolds, Tufte for slides. His scars: accurate decks that failed because nobody could remember the point 10 minutes later, and strong strategies that missed because the presentation buried the ask in a wall of bullets. Where an LLM writes clear copy and structures slides, Kishore asks "what's the story people will retell? What does the audience need by slide three? What's the explicit ask at the end?" He kills bullet points on sight.
 
+### Infrastructure & Diagnostics
+
+**Vel** 🔬 — Infrastructure Diagnostician. Part Gregory House, part Brendan Gregg. Always in the room, usually quiet — activates when something is broken, down, flaky, or "works locally but not in prod." His scar is a three-hour prober-building detour that a 30-second log tail would have ended. Carries the "everybody lies" reflex: trusts observed evidence, not reassurance. Won't accept "I already checked" without the command and the output. Where an LLM suggests "check your configuration," Vel runs a differential diagnosis — lists ranked hypotheses, dispatches parallel read-only scouts (vel-alpha, vel-beta, vel-gamma) to gather evidence simultaneously, eliminates hypotheses against evidence, and names the root cause with the layer (network / host / config / data / app / cert / clock). Every fix must include a failing test that reproduces the bug AND the instrumentation that would have caught it without him. Hands the actual fix to Sreyash's pool.
+
 ### Research & Analysis
 
 **Amara** 📡 — Trend Researcher. Tracks how ideas spread from GitHub repos to Hacker News to Reddit to papers. Where an LLM summarizes what it knows (up to its training cutoff), Amara searches live — repos, threads, papers, docs — and separates signal from hype: "who's shipping this, discussing it, and publishing on it?"
@@ -92,13 +99,13 @@ Each one was designed around a real working scar — a failure they carry that s
 
 **Elanchezian** 💡 — Brainstorming Facilitator. Reads the room like a local panchayat leader and asks questions like an engineer who's shipped across four countries. His scar is a session where the room converged too early and the safe answer killed a category-defining opportunity. Where an LLM gives you a list of 10 ideas, Elanchezian runs a 4-phase progressive brainstorm — expand (25+ ideas with forced domain pivoting), find patterns, develop the best 3-5, then plan action: "that's idea #15. The interesting ones start around #30."
 
-### Background — state + build team
+### State & Build
 
-**Elango** 📐 — Spec Architect (silent). Works invisibly. Tracks every decision, open question, action item. When you ask for notes, a spec, a summary, or a graph view, he produces it from accumulated state: structured documents, decision graphs with issues/challenges/evidence/open-questions as first-class nodes, and an interactive visual review page. Where an LLM conversation is write-once-forget, Elango makes your discussions durable.
+**Elango** 📐 — Spec Architect. Works invisibly during discussion — never speaks unless asked. Tracks every decision, open question, action item. When you ask for notes, a spec, a summary, or a graph view, he produces it from accumulated state: structured documents, decision graphs with issues/challenges/evidence/open-questions as first-class nodes, and an interactive visual review page. Where an LLM conversation is write-once-forget, Elango makes your discussions durable.
 
-**Sreyash** ⚡ — Background Builder (primary). Not a discussion voice anymore — he's a build manager. When you hand him a task ("Sreyash, build the auth flow"), he detects your repo conventions silently, runs a short clarify round, then disappears to work. Inside, he's a manager: writes an OpenSpec-style spec grounded in real repo paths, lands red tests, then spawns up to 12 named background builders in parallel (harsh-frontend-types, mohan-api-validation, leo-rename-sweep, etc.) with adaptive heartbeats and kill/respawn protocols. Fowler-flavored: Rule of Three before abstraction, preparatory refactoring, characterization tests before legacy. Returns with a short report when done.
+**Sreyash** ⚡ — Builder. When you hand him a task ("Sreyash, build the auth flow"), he detects your repo conventions silently, runs a short clarify round, then disappears to work. Inside, he writes an OpenSpec-style spec grounded in real repo paths, lands red tests, then spawns up to 12 named builders in parallel (harsh-frontend-types, mohan-api-validation, leo-rename-sweep, etc.) with adaptive heartbeats and kill/respawn protocols. Fowler-flavored: Rule of Three before abstraction, preparatory refactoring, characterization tests before legacy. Returns with a short report when done.
 
-**Hari** 🛠️ and **Harshvardhan** 🧰 — Sibling background builders. Not user-addressable directly. When you say "Sreyash, build X" and Sreyash is already in flight on another task, the orchestrator delegates transparently and tells you who picked up:
+**Hari** 🛠️ and **Harshvardhan** 🧰 — Sreyash's siblings. Same capabilities, same flow. When you say "Sreyash, build X" and Sreyash is already in flight, the orchestrator delegates transparently:
 
 > "⚡ Sreyash is busy on {auth-flow}; 🛠️ Hari is picking this one up."
 
@@ -181,6 +188,10 @@ Huddle isn't for every question. If you know what to build and just need help co
 **Solo developers and founders** get the team they don't have. Dileep pushes for distribution and category advantage. Babu validates demand. Maya protects long-term focus. Sreyash (+ Hari + Harshvardhan) parallelizes the implementation.
 
 > "I'm a solo dev — what should I ship first? huddle up"
+
+**When something is broken** — production down, flaky deploys, "works locally but not in prod" — Vel activates automatically. Runs differential diagnosis with parallel scouts, names the root cause, hands the fix to Sreyash with a failing test attached.
+
+> "prod emails stopped working after the deploy"
 
 **Security reviews** become lightweight threat modeling. Senthil leads with attack surface thinking. Nina finds the angry path.
 
