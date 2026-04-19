@@ -39,13 +39,29 @@ Answers are easy now. Anyone can generate code, architecture, or docs on demand.
 
 These questions decide whether a system survives first contact with users.
 
+## But decisions don't stay in one room
+
+A decision gets made. Then it moves.
+
+A developer explains it to another developer. Then to a manager. The CTO explains it to the CEO. Each retelling strips something — the tradeoff, the edge case, the assumption nobody wrote down.
+
+The intent gets diluted. The risks get softened. The wrong thing starts sounding right.
+
+LLMs give a clean answer — framed in one voice.
+
+The question isn't just *"what's the right answer?"* It's *"can this decision survive every room it enters?"*
+
+Good systems don't only fail because of bad code. They fail because the thinking didn't survive translation.
+
 ## They don't come from one voice
 
-A backend engineer sees failure modes. A security engineer sees blast radius. A product manager sees the value metric. An architect sees capacity math. Each asks different questions — and most of those questions arrive too late, in incident channels and retros.
+A backend engineer sees failure modes. A security engineer sees blast radius. A product manager sees the value metric. An architect sees capacity math. A tech writer makes the decision legible to the next team. A storyteller frames it for the room above engineering.
 
-**Huddle** exists to pull those questions to the front.
+Each asks different questions — and most of those questions arrive too late, in incident channels and retros.
 
-It runs repo-aware, multi-persona engineering discussions *before* the system is locked in. 21 named personas — Shaama (backend, rollback-first), Senthil (security, blast radius), Prabagar (PM, value metric), Suren (architect, DORA and boring tech), and more — disagree with each other, grounded in your repo, then stop and wait for your call.
+**Huddle** exists to pull those questions to the front, in every voice the decision will eventually need to survive.
+
+It runs repo-aware, multi-persona engineering discussions *before* the system is locked in. 21 named personas — Shaama (backend, rollback-first), Senthil (security, blast radius), Prabagar (PM, value metric), Suren (architect, DORA and boring tech), Deepak (tech writer, handoff-survivable docs), Kishore (storyteller, kills bullet points), and more — disagree with each other, grounded in your repo, then stop and wait for your call.
 
 Install:
 
@@ -53,6 +69,6 @@ Install:
 npx skills add muthuishere-agent-skills/huddle
 ```
 
-Better systems aren't built by faster answers. They're built by better questions, asked at the right time.
+Better systems aren't built by faster answers. They're built by better questions, asked at the right time — and answers that survive every room they enter.
 
-> Huddle helps you ask the questions you'd otherwise discover in production.
+> Huddle helps you ask the right questions — and makes sure the answers survive every room they enter.

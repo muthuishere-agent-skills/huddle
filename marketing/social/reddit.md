@@ -28,8 +28,10 @@ So the bottleneck has moved. It used to be *"can we build this?"* and almost any
 
 The questions that save systems are uncomfortable and usually come from people with scars: the backend engineer who's been paged at 2am, the security person who sees blast radius, the PM who knows what a support ticket actually costs. Most of them aren't in the room when the code gets written. By the time they are, it's in production.
 
+There's another thing most teams underestimate. A decision gets made, then it moves — developer to developer, dev to manager, CTO to CEO. Each retelling strips something. The tradeoff. The edge case. The assumption nobody wrote down. The wrong thing starts sounding right. Good systems don't only fail because of bad code; they fail because the thinking didn't survive translation.
+
 ---
 
-**Disclosure:** I'm building [Huddle](https://github.com/muthuishere-agent-skills/huddle), a Claude Code skill that runs multi-persona engineering discussions on your repo — explicitly to pull those kinds of questions forward. `npx skills add muthuishere-agent-skills/huddle` if you're curious. But the thesis stands either way — LLMs haven't changed where the hard part of software is, and the team that asks the sharper questions ships the better system.
+**Disclosure:** Been building this for months. It's an agent skill — 21 agents who ask the questions you'd otherwise discover in production, TDD the build, and handle infra from VPS to K8s. Repo: https://github.com/muthuishere-agent-skills/huddle. Install: `npx skills add muthuishere-agent-skills/huddle`. The thesis stands either way — LLMs haven't changed where the hard part of software is, and the team that asks sharper questions ships the better system.
 
 Curious what other people have seen — are you finding LLMs make the hard parts feel harder by comparison, or easier because they help you explore faster?

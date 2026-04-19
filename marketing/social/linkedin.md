@@ -1,6 +1,6 @@
 # LinkedIn post
 
-Answers got cheap this year. Questions got more valuable.
+Answers got cheap this year. Questions stayed scarce.
 
 Every engineer who's shipped a real system has seen the 80% problem. APIs come together. The demo works. The system feels almost done.
 
@@ -15,18 +15,18 @@ The second 90% is untouched. Edge cases, hidden assumptions, the thing nobody as
 The bottleneck used to be *"can we build this?"*
 Now it's *"did we think about this deeply enough?"*
 
-The questions that save systems are the uncomfortable ones:
-→ What happens when this fails in production?
-→ Who controls this input?
-→ What assumption are we making here?
-→ Is this solving the real problem, or a version of it?
+There's another layer most teams underestimate.
 
-They come from people who've watched systems break. A backend engineer with on-call scars. A security mind who sees blast radius. A PM who names the value metric. An architect who does the capacity math. Most of them aren't in the room when the code gets written.
+A decision gets made — and then it moves. A developer explains it to another developer. Then to a manager. The CTO explains it to the CEO. Each retelling strips something — the tradeoff, the edge case, the assumption nobody wrote down. The wrong thing starts sounding right.
 
-That's why I built **Huddle** — a Claude Code skill that puts 21 opinionated personas in the room with you, grounded in your actual repo, disagreeing with each other before the system is locked in.
+LLMs give a clean answer. But it's framed in one voice. And one voice rarely survives every room it enters.
+
+So I built an agent skill.
+
+Been building this for months. LLMs get you to 80% done in an afternoon. The last 20% — edge cases, hidden assumptions, real usage — still eats weeks. So I built an agent skill. 21 agents who ask the questions you'd otherwise discover in production, TDD the build, and handle infra from VPS to K8s.
 
 `npx skills add muthuishere-agent-skills/huddle`
 
-Better systems aren't built by faster answers. They're built by better questions, asked at the right time.
+Good systems don't only fail because of bad code. They fail because the thinking didn't survive translation.
 
-#SoftwareEngineering #LLM #ClaudeCode #DeveloperTools
+#SoftwareEngineering #LLM #DeveloperTools #AgentSkills

@@ -3,7 +3,7 @@
 **1/**
 Answers got cheap this year.
 
-Questions got valuable.
+Questions stayed valuable.
 
 ---
 
@@ -60,27 +60,36 @@ Most aren't in the room when the code gets written.
 ---
 
 **7/**
-That's Huddle.
+And decisions don't stay in one room.
 
-21 opinionated personas, in the room with you, grounded in your actual repo. They disagree. They stop and wait. You decide.
+A developer explains it to another developer. Then to a manager. The CTO to the CEO.
+
+Each retelling strips something — the tradeoff, the edge case, the assumption nobody wrote down.
+
+---
+
+**8/**
+That's why I built an agent skill.
+
+21 agents → ask the right questions, TDD the build, run infra from VPS to K8s.
+
+Grounded in your repo. They disagree. They stop and wait. You decide.
 
 `npx skills add muthuishere-agent-skills/huddle`
 
 ---
 
-**8/**
-Better systems aren't built by faster answers.
+**9/**
+Good systems don't only fail because of bad code.
 
-They're built by better questions — asked at the right time.
+They fail because the thinking didn't survive translation.
 
 ---
 
-## Single-tweet version (if a thread is too much)
+## Single-tweet version
 
-Answers got cheap this year. Questions got valuable.
+80% done feels great. The last 20% is where systems break. LLMs didn't change that — they just got you there faster.
 
-LLMs compressed the first 90% of a build. The last 10% — hidden assumptions, failure paths, real usage — is exactly as hard as it was.
-
-Huddle puts 21 opinionated personas in the room with you, before the system locks in.
+So I built an agent skill: 21 agents → right questions, TDD, infra from VPS to K8s.
 
 `npx skills add muthuishere-agent-skills/huddle`
