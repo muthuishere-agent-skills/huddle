@@ -49,6 +49,7 @@ All scripts are Python 3, stdlib-only, and output JSON to stdout.
 | `repo_context.py` | `{PYTHON_BIN} scripts/repo_context.py snapshot` | Gathers repo context (git state, PRs, remote info); supports non-git local-folder mode |
 | `project_state.py` | `{PYTHON_BIN} scripts/project_state.py check|read|write ...` | Weekly project documentation freshness gate |
 | `md_to_html.py` | `{PYTHON_BIN} scripts/md_to_html.py <note.md> [base_url]` | Bundles huddle note + `huddle-state.json` into a gzip+base64 URL fragment and opens the hosted review page |
+| `migrate.py` | `{PYTHON_BIN} scripts/migrate.py` | One-time migration from legacy `~/config/muthuishere-agent-skills/` to `~/.config/muthuishere-agent-skills/`. Spawned detached by `meeting_state.py` only when the new root doesn't yet exist. Idempotent; never overwrites existing targets. |
 
 ## Running Tests
 

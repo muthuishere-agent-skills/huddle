@@ -169,6 +169,26 @@ def test_graph_state_py_removed() -> None:
     print("  [ok] graph_state.py removed")
 
 
+def test_migrate_legacy_config(home: Path) -> None:
+    old_root = home / "config" / "muthuishere-agent-skills" / "oldrepo" / "main" / "huddle"
+    old_root.mkdir(parents=True, exist_ok=True)
+    (old_root / "2026-01-01.md").write_text("legacy note", encoding="utf-8")
+    (home / "config" / "muthuishere-agent-skills" / "oldrepo" / "config.json").write_text(
+        '{"reponame":"oldrepo"}', encoding="utf-8"
+    )
+
+    run(["python3", "scripts/migrate.py"], cwd=ROOT, env={"HOME": str(home)})
+
+    new_root = home / ".config" / "muthuishere-agent-skills" / "oldrepo"
+    assert (new_root / "config.json").exists(), "config.json not moved"
+    assert (new_root / "main" / "huddle" / "2026-01-01.md").exists(), "legacy note not moved"
+    assert not (home / "config" / "muthuishere-agent-skills").exists(), \
+        "legacy muthuishere-agent-skills dir should be cleaned up"
+
+    run(["python3", "scripts/migrate.py"], cwd=ROOT, env={"HOME": str(home)})
+    print("  [ok] migrate.py — legacy ~/config moved to ~/.config, idempotent")
+
+
 def main() -> int:
     tmp_root = Path(tempfile.mkdtemp(prefix="huddle-e2e-"))
     home = tmp_root / "home"
@@ -178,11 +198,15 @@ def main() -> int:
 
     env = {"HOME": str(home)}
 
+    migrate_home = tmp_root / "migrate-home"
+    migrate_home.mkdir(parents=True, exist_ok=True)
+
     try:
         print("Running e2e tests...")
         test_meeting_state_ensure(env)
         test_md_to_html(sample)
         test_graph_state_py_removed()
+        test_migrate_legacy_config(migrate_home)
         print("\ne2e ok")
         return 0
     except AssertionError as exc:

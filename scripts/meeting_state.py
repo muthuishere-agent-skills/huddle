@@ -288,6 +288,29 @@ def _load_state(state_file):
 # ensure
 # ---------------------------------------------------------------------------
 
+def _maybe_spawn_migration():
+    """First-time only: if the new config root doesn't exist but the old one
+    does, spawn scripts/migrate.py detached so huddle init isn't blocked.
+    The migration is idempotent; meeting_state creating files concurrently is
+    safe because migrate.py never overwrites existing targets.
+    """
+    old_root = pathlib.Path.home() / "config" / "muthuishere-agent-skills"
+    if skills_root().exists() or not old_root.is_dir():
+        return
+    script = pathlib.Path(__file__).parent / "migrate.py"
+    if not script.exists():
+        return
+    try:
+        subprocess.Popen(
+            [sys.executable, str(script)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        pass
+
+
 def _load_userconfig():
     """Load global userconfig.json, or return empty dict."""
     p = userconfig_path()
@@ -326,6 +349,8 @@ def _save_repo_config(reponame, config):
 
 def ensure(project_root_str, date_str):
     project_root = str(pathlib.Path(project_root_str).resolve())
+
+    _maybe_spawn_migration()
 
     # --- User-level config (global, shared across all repos) ---
     uc = _load_userconfig()
