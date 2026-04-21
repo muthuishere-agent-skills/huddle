@@ -2,10 +2,10 @@
 """
 One-time migration from ~/config/muthuishere-agent-skills/ to ~/.config/muthuishere-agent-skills/.
 
-Triggered by meeting_state.py only on first-ever huddle run (when the new
+Triggered by global_state.py only on first-ever huddle run (when the new
 config root doesn't exist yet), spawned as a detached background process.
 
-Idempotent and safe to run concurrently with meeting_state writing new files:
+Idempotent and safe to run concurrently with other preflight scripts writing new files:
 walks the old tree and moves each file to the new location only if the target
 doesn't already exist. Never overwrites. Removes now-empty old directories.
 """

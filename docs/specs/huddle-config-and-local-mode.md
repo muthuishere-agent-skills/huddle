@@ -104,5 +104,6 @@ At startup, huddle should:
 - `scripts/repo_context.py`
   - supports git mode and local folder mode
   - reuses stored config for non-git projects
-- `scripts/meeting_state.py`
-  - creates branch-first huddle directories under the new config root
+- `scripts/global_state.py`, `scripts/project_state.py`, `scripts/session_state.py`
+  - three parallel preflight calls: global (cached), project (per-session), session (live)
+  - `session_state.py` ensures today's huddle note exists under the branch-scoped directory

@@ -16,7 +16,7 @@ references/
   persona-roster.xml              # Lightweight persona index
   personas/                       # Full persona definitions (voice, principles)
   steps/
-    step-00-preflight.md          # Single-command startup via meeting_state.py
+    step-00-preflight.md          # Three parallel preflight calls (global/project/session)
     step-01-meeting-init.md       # Load user, config, state, personas
     step-02-discussion.md         # Main discussion loop (all modes route here)
     step-03-smart-exit.md         # Wrap-up / pause persistence
@@ -28,6 +28,7 @@ e2e/run.py                       # Smoke tests
 
 ## Key Architecture Decisions
 
+- **Preflight is three parallel calls.** `global_state.py` (cached in `userconfig.json`, ~1ms on warm cache), `project_state.py snapshot` (file reads + minimal git identity probes, recomputed once per session and bound to a variable), and `session_state.py` (live git/gh probes, never cached). Claude fires all three in one message so wall-clock ≈ the slowest.
 - **Append-only raw writes, synthesis on demand.** During live discussion, NO file writes happen on normal rounds. On decisions/milestones, a single raw event JSON file is written directly to `{huddle_dir}/raw/` using the Write tool — no Python script, no background process. When the user asks for notes or wraps up, synthesis reads all `raw/*.json` + conversation context, writes `huddle-state.json` + `.md`, and deletes the raw files.
 - **`huddle-state.json` is the synthesized source of truth** for all huddle state (decisions, participants, key moments, open questions, action items). Written only on explicit ask or wrap-up — not every round.
 - **User-level config at `~/.config/muthuishere-agent-skills/userconfig.json`** stores `git_user`, `python_bin`, and `gh_available` — detected once globally on first ever huddle run, shared across all repos. Repo-level config at `~/.config/muthuishere-agent-skills/{reponame}/config.json` stores only repo-specific values (`reponame`, `owner_repo`, `default_branch`).
@@ -43,14 +44,14 @@ All scripts are Python 3, stdlib-only, and output JSON to stdout.
 
 | Script | Usage | Purpose |
 |---|---|---|
-| `meeting_state.py` | `python3 scripts/meeting_state.py ensure <project_root> <date>` | Single entry point for preflight — runs **every** git/gh shell probe in one parallel batch (user/branch/remote/gh-auth/status/log/HEAD/toplevel), then a small phase-2 batch for `gh pr list` + huddle history. Inlines `project_state.evaluate_scan` (no second Python subprocess). Returns JSON with `next_action` and `python_bin`. |
-| `bundle_context.py` | `{PYTHON_BIN} scripts/bundle_context.py <reponame> <branch>` | File-based context (no shell): bundles `persona-roster.xml` + cross-branch huddle summaries. Cheap, cacheable, safe to re-call. |
+| `global_state.py` | `python3 scripts/global_state.py` | Global, user-level state cached in `userconfig.json` — `git_user`, `python_bin`, `gh_available`, `persona_roster_xml`. First call detects and caches; subsequent calls are pure file reads (~1ms). Also spawns `migrate.py` detached on first-ever run. |
+| `project_state.py` | `{PYTHON_BIN} scripts/project_state.py snapshot <project_root>` (also `check\|read\|write`) | Repo-scoped state computed once per session. `snapshot` returns `reponame`, `owner_repo`, `branch`, huddle paths, project doc freshness, `cross_branch_context`, `raw_events`, and `saved_state`. File reads only; minimal cheap git identity probes. |
+| `session_state.py` | `{PYTHON_BIN} scripts/session_state.py <project_root> <date>` | Live probes, never cached. Parallel batch of `git status`, `git log --since=8h`, `git branch`, `git HEAD`, `gh pr list`. Also ensures today's huddle note file exists and reports `is_resume`. |
 | `huddle_writer.py` | `{PYTHON_BIN} scripts/huddle_writer.py <huddle_dir> '<event_json>'` | Standalone event writer for non-Claude agents (Codex, Copilot, Windsurf). Claude uses Write tool directly instead. |
-| `config_helper.py` | `{PYTHON_BIN} scripts/config_helper.py read|get|set|bootstrap ...` | Per-repo config CRUD at `~/.config/muthuishere-agent-skills/{reponame}/config.json` |
+| `config_helper.py` | `{PYTHON_BIN} scripts/config_helper.py read\|get\|set\|bootstrap ...` | Per-repo config CRUD at `~/.config/muthuishere-agent-skills/{reponame}/config.json` |
 | `repo_context.py` | `{PYTHON_BIN} scripts/repo_context.py snapshot` | Gathers repo context (git state, PRs, remote info); supports non-git local-folder mode |
-| `project_state.py` | `{PYTHON_BIN} scripts/project_state.py check|read|write ...` | Weekly project documentation freshness gate |
 | `md_to_html.py` | `{PYTHON_BIN} scripts/md_to_html.py <note.md> [base_url]` | Bundles huddle note + `huddle-state.json` into a gzip+base64 URL fragment and opens the hosted review page |
-| `migrate.py` | `{PYTHON_BIN} scripts/migrate.py` | One-time migration from legacy `~/config/muthuishere-agent-skills/` to `~/.config/muthuishere-agent-skills/`. Spawned detached by `meeting_state.py` only when the new root doesn't yet exist. Idempotent; never overwrites existing targets. |
+| `migrate.py` | `{PYTHON_BIN} scripts/migrate.py` | One-time migration from legacy `~/config/muthuishere-agent-skills/` to `~/.config/muthuishere-agent-skills/`. Spawned detached by `global_state.py` only when the new root doesn't yet exist. Idempotent; never overwrites existing targets. |
 
 ## Running Tests
 
@@ -58,7 +59,7 @@ All scripts are Python 3, stdlib-only, and output JSON to stdout.
 python3 e2e/run.py
 ```
 
-This smoke-tests `meeting_state.py ensure`, `md_to_html.py` bundling, and verifies removed files stay removed. Uses a temp `$HOME` so it won't touch real config.
+This smoke-tests the three preflight scripts (`global_state`, `project_state snapshot`, `session_state`), `md_to_html.py` bundling, and the one-time `migrate.py` flow. Uses a temp `$HOME` so it won't touch real config.
 
 ## State Storage Layout
 
