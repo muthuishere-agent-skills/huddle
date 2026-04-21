@@ -91,27 +91,128 @@ SAMPLE_STATE = {
 }
 
 
-def test_meeting_state_ensure(env: dict) -> None:
-    out = run(
-        ["python3", "scripts/meeting_state.py", "ensure", "sample-repo", "main", "2026-04-05"],
-        cwd=ROOT,
-        env=env,
+def test_global_state(home: Path) -> None:
+    out = run(["python3", "scripts/global_state.py"], cwd=ROOT, env={"HOME": str(home)})
+    first = json.loads(out)
+    assert first["python_bin"], "python_bin not detected"
+    assert first["git_user"], "git_user not resolved"
+    assert "gh_available" in first, "gh_available missing"
+    assert "<persona-roster" in first["persona_roster_xml"], "persona roster missing"
+
+    uc = home / ".config" / "muthuishere-agent-skills" / "userconfig.json"
+    assert uc.exists(), "userconfig.json not written"
+    cached = json.loads(uc.read_text())
+    assert cached["python_bin"] == first["python_bin"], "python_bin not cached"
+    assert cached["git_user"] == first["git_user"], "git_user not cached"
+
+    uc.write_text(json.dumps({**cached, "git_user": "Sentinel"}), encoding="utf-8")
+    out2 = run(["python3", "scripts/global_state.py"], cwd=ROOT, env={"HOME": str(home)})
+    second = json.loads(out2)
+    assert second["git_user"] == "Sentinel", "cached git_user not honored on second call"
+
+    print("  [ok] global_state — detects, caches, honors cache on repeat")
+
+
+def test_project_state_snapshot(home: Path, tmp: Path) -> None:
+    project = tmp / "sample-proj"
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "README.md").write_text("hi", encoding="utf-8")
+    for i in range(25):
+        (project / f"f{i}.txt").write_text("x", encoding="utf-8")
+
+    repo_root = home / ".config" / "muthuishere-agent-skills" / "sample-proj"
+    (repo_root / "main" / "huddle" / "raw").mkdir(parents=True, exist_ok=True)
+    (repo_root / "main" / "huddle" / "raw" / "20260401T000000_decision.json").write_text(
+        json.dumps({"kind": "decision", "ts": "2026-04-01T00:00:00Z"}),
+        encoding="utf-8",
     )
-    result = json.loads(out)
+    (repo_root / "feature-x" / "huddle").mkdir(parents=True, exist_ok=True)
+    (repo_root / "feature-x" / "huddle" / "2026-04-15.md").write_text(
+        "# Huddle\n\n## Latest Summary\nSketched new script.\n",
+        encoding="utf-8",
+    )
 
-    assert "huddle_state_file" in result, "missing huddle_state_file"
-    assert "huddle_note_file" in result, "missing huddle_note_file"
-    assert "graph_raw_file" not in result, "graph_raw_file should not appear"
+    out = run(
+        ["python3", "scripts/project_state.py", "snapshot", str(project)],
+        cwd=ROOT,
+        env={"HOME": str(home)},
+    )
+    snap = json.loads(out)
+    assert snap["reponame"] == "sample-proj", f"wrong reponame: {snap['reponame']}"
+    assert "huddle_state_file" in snap, "missing huddle_state_file"
+    assert snap["project_scan"]["scan"] is False, "no git repo → scan should be False"
+    assert snap["saved_state"]["decisions"] == [], "saved_state should default empty"
+    raw = snap["raw_events"]
+    assert len(raw) == 1 and raw[0]["kind"] == "decision", f"raw_events wrong: {raw}"
+    branches = [e["branch"] for e in snap["cross_branch_context"]]
+    assert branches == ["feature-x"], f"unexpected cross-branch list: {branches}"
+    assert snap["project_docs_found"] == [], "no docs were added, list should be empty"
+    print("  [ok] project_state snapshot — identity, raw events, cross-branch, saved_state")
 
-    state = json.loads(Path(result["huddle_state_file"]).read_text())
-    assert state["decisions"] == [], "decisions should start empty"
-    assert state["participants"] == [], "participants should start empty"
-    assert state["key_moments"] == [], "key_moments should start empty"
 
-    assert not (Path(result["huddle_state_file"]).parent / "graph-raw.json").exists(), \
-        "graph-raw.json should not be created"
+def test_project_state_doc_detection(home: Path, tmp: Path) -> None:
+    bare = tmp / "bare-proj"
+    bare.mkdir(parents=True, exist_ok=True)
+    for i in range(25):
+        (bare / f"src{i}.py").write_text("pass\n", encoding="utf-8")
+    out = run(
+        ["python3", "scripts/project_state.py", "snapshot", str(bare)],
+        cwd=ROOT, env={"HOME": str(home)},
+    )
+    snap = json.loads(out)
+    assert snap["project_docs_found"] == [], f"bare repo should have no docs: {snap['project_docs_found']}"
 
-    print("  [ok] meeting_state ensure — schema correct, no graph-raw.json")
+    documented = tmp / "documented-proj"
+    documented.mkdir(parents=True, exist_ok=True)
+    for i in range(25):
+        (documented / f"src{i}.py").write_text("pass\n", encoding="utf-8")
+    (documented / "README.md").write_text("# Project\n\n" + ("Real content. " * 50), encoding="utf-8")
+    (documented / "CLAUDE.md").write_text("# Guide\n\n" + ("More context. " * 50), encoding="utf-8")
+    (documented / "docs").mkdir()
+    (documented / "docs" / "overview.md").write_text("# Overview\n\n" + ("Details. " * 50), encoding="utf-8")
+
+    out = run(
+        ["python3", "scripts/project_state.py", "snapshot", str(documented)],
+        cwd=ROOT, env={"HOME": str(home)},
+    )
+    snap = json.loads(out)
+    found = set(snap["project_docs_found"])
+    assert "README.md" in found, f"README.md not detected: {found}"
+    assert "CLAUDE.md" in found, f"CLAUDE.md not detected: {found}"
+    assert any(p.startswith("docs/") for p in found), f"docs/*.md not detected: {found}"
+    assert snap["project_doc_missing"] is False, \
+        "project_doc_missing should flip false once real docs are present"
+
+    tiny = tmp / "tiny-readme-proj"
+    tiny.mkdir(parents=True, exist_ok=True)
+    for i in range(25):
+        (tiny / f"src{i}.py").write_text("pass\n", encoding="utf-8")
+    (tiny / "README.md").write_text("# x\n", encoding="utf-8")
+    out = run(
+        ["python3", "scripts/project_state.py", "snapshot", str(tiny)],
+        cwd=ROOT, env={"HOME": str(home)},
+    )
+    snap = json.loads(out)
+    assert snap["project_docs_found"] == [], \
+        f"tiny README should not count as docs: {snap['project_docs_found']}"
+
+    print("  [ok] project_state doc detection — README/CLAUDE.md/docs trigger, tiny stubs don't")
+
+
+def test_session_state(home: Path, tmp: Path) -> None:
+    project = tmp / "sess-proj"
+    project.mkdir(parents=True, exist_ok=True)
+    out = run(
+        ["python3", "scripts/session_state.py", str(project), "2026-04-21"],
+        cwd=ROOT,
+        env={"HOME": str(home)},
+    )
+    sess = json.loads(out)
+    assert sess["reponame"] == "sess-proj", f"wrong reponame: {sess['reponame']}"
+    assert sess["is_resume"] is False, "fresh note should not be resume"
+    assert sess["git_status"] == [], "expected empty git_status in non-repo dir"
+    assert Path(sess["huddle_note_file"]).exists(), "note file not created"
+    print("  [ok] session_state — live probes + note ensured")
 
 
 def test_md_to_html(sample: Path) -> None:
@@ -169,20 +270,46 @@ def test_graph_state_py_removed() -> None:
     print("  [ok] graph_state.py removed")
 
 
+def test_migrate_legacy_config(home: Path) -> None:
+    old_root = home / "config" / "muthuishere-agent-skills" / "oldrepo" / "main" / "huddle"
+    old_root.mkdir(parents=True, exist_ok=True)
+    (old_root / "2026-01-01.md").write_text("legacy note", encoding="utf-8")
+    (home / "config" / "muthuishere-agent-skills" / "oldrepo" / "config.json").write_text(
+        '{"reponame":"oldrepo"}', encoding="utf-8"
+    )
+
+    run(["python3", "scripts/migrate.py"], cwd=ROOT, env={"HOME": str(home)})
+
+    new_root = home / ".config" / "muthuishere-agent-skills" / "oldrepo"
+    assert (new_root / "config.json").exists(), "config.json not moved"
+    assert (new_root / "main" / "huddle" / "2026-01-01.md").exists(), "legacy note not moved"
+    assert not (home / "config" / "muthuishere-agent-skills").exists(), \
+        "legacy muthuishere-agent-skills dir should be cleaned up"
+
+    run(["python3", "scripts/migrate.py"], cwd=ROOT, env={"HOME": str(home)})
+    print("  [ok] migrate.py — legacy ~/config moved to ~/.config, idempotent")
+
+
 def main() -> int:
     tmp_root = Path(tempfile.mkdtemp(prefix="huddle-e2e-"))
-    home = tmp_root / "home"
+    home_global = tmp_root / "home-global"
+    home_project = tmp_root / "home-project"
+    home_session = tmp_root / "home-session"
+    migrate_home = tmp_root / "migrate-home"
     sample = tmp_root / "sample"
-    home.mkdir(parents=True, exist_ok=True)
-    sample.mkdir(parents=True, exist_ok=True)
-
-    env = {"HOME": str(home)}
+    tmp_projects = tmp_root / "projects"
+    for p in (home_global, home_project, home_session, migrate_home, sample, tmp_projects):
+        p.mkdir(parents=True, exist_ok=True)
 
     try:
         print("Running e2e tests...")
-        test_meeting_state_ensure(env)
+        test_global_state(home_global)
+        test_project_state_snapshot(home_project, tmp_projects)
+        test_project_state_doc_detection(home_project, tmp_projects)
+        test_session_state(home_session, tmp_projects)
         test_md_to_html(sample)
         test_graph_state_py_removed()
+        test_migrate_legacy_config(migrate_home)
         print("\ne2e ok")
         return 0
     except AssertionError as exc:
