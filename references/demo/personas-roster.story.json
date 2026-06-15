@@ -1,0 +1,49 @@
+{
+  "name": "company-os-personas-roster",
+  "size": "1920x1080",
+  "fps": 30,
+  "theme": "/Users/muthuishere/muthu/deemwarworkspace/auto-demo/themes/deemwar.json",
+  "voiceover": {
+    "engine": "gemini",
+    "parts": [
+      { "at": "card:stakes", "text": "The huddle had twenty-two archetypes — but the company's own fleet had a dozen real faces with no persona file at all." },
+      { "at": "card:turn",   "text": "So we wrote them: thirteen company-os-live personas, in the exact huddle format, each with a real scar — aliases deduped." },
+      { "at": "vhs:tree",    "text": "Thirty-five personas now — the archetypes plus the full live roster, from the trading desks to the builders." },
+      { "at": "vhs:verify",  "text": "And the validator agrees: sixty-seven checks green. Every file has its frontmatter, its signature phrases, its disagreements, a real scar, and a roster entry — with no alias duplicated." },
+      { "at": "card:outro",  "text": "deemwar. Build in public." }
+    ]
+  },
+  "cards": [
+    { "id": "stakes", "title": "The roster was half-empty.", "subtitle": "22 archetypes · but the real fleet had no persona files", "style": "stakes", "duration": 10 },
+    { "id": "turn",   "title": "The complete company roster.", "subtitle": "13 company-os-live personas · exact huddle format · aliases deduped", "style": "brand", "duration": 10 }
+  ],
+  "vhs": [
+    {
+      "id": "tree",
+      "settings": { "FontSize": 24, "TypingSpeed": "35ms", "Padding": 48 },
+      "lines": [
+        "Type \"cd ~/muthu/gitworkspace/huddle-workspace/huddle\"",
+        "Enter", "Sleep 400ms",
+        "Type \"ls references/personas/*.md | wc -l    # total personas\"",
+        "Enter", "Sleep 1800ms",
+        "Type \"sed -n '9,16p' references/COMPANY-ROSTER.md\"",
+        "Enter", "Sleep 4200ms"
+      ]
+    },
+    {
+      "id": "verify",
+      "settings": { "FontSize": 24, "TypingSpeed": "35ms", "Padding": 48 },
+      "lines": [
+        "Type \"cd ~/muthu/gitworkspace/huddle-workspace/huddle\"",
+        "Enter", "Sleep 400ms",
+        "Type \"bash references/verify-personas.sh | tail -n 3\"",
+        "Enter", "Sleep 11000ms"
+      ]
+    }
+  ],
+  "captions": [
+    { "segment": "vhs:tree",   "text": "35 personas — 22 archetypes + 13 live fleet roles", "from": 0.5, "to": 8 },
+    { "segment": "vhs:verify", "text": "67/67 PASS — frontmatter, scar, sections, roster, no alias dup", "from": 0.5, "to": 9 }
+  ],
+  "timeline": ["card:stakes", "card:turn", "vhs:tree", "vhs:verify", "card:outro"]
+}
