@@ -20,6 +20,9 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import synced_assets  # noqa: E402  (sibling module in scripts/)
+
 
 SKILL_ROOT = pathlib.Path(__file__).resolve().parent.parent
 ROSTER_PATH = SKILL_ROOT / "references" / "persona-roster.xml"
@@ -110,11 +113,19 @@ def snapshot() -> dict:
     if not python_bin:
         warnings.append("Python not found. Install Python 3.x.")
 
+    # Externally-synced GLOBAL personas (+ their per-persona memories).
+    # Producer-agnostic, read-only, never cached (must reflect latest sync).
+    # Absent dir -> []. A cheap directory glob; the ~1ms warm-cache path holds.
+    synced_personas_global = synced_assets.scan_personas(
+        CONFIG_ROOT / "personas", "synced-global"
+    )
+
     return {
         "python_bin": python_bin,
         "git_user": git_user,
         "gh_available": gh_available,
         "persona_roster_xml": _read_roster(),
+        "synced_personas_global": synced_personas_global,
         "skill_root": str(SKILL_ROOT),
         "warnings": warnings,
     }

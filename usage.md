@@ -25,7 +25,7 @@ Here's what that looks like in practice:
 | Generic best practices | Grounded in your repo — your branch, your recent commits, your open PRs |
 | The LLM decides the framing | You decide. Personas present, then stop and wait for your call |
 | "Here are the security considerations" as a bullet point | Senthil asks "who controls that input?" and won't move on until you answer |
-| One conversation, then gone | Elango silently tracks every decision in the background and produces specs, notes, and decision graphs on demand |
+| One conversation, then gone | Elango silently tracks every decision in the background and produces specs and notes on demand |
 | "Here's how to implement it" | You hand the build to Sreyash — he spawns a background crew, writes spec + tests + code, reports back |
 | "Check your configuration" when something breaks | Vel runs differential diagnosis with parallel scouts, names root cause and layer, hands fix to Sreyash with a failing repro test |
 
@@ -101,7 +101,7 @@ Some personas talk in the room. Some take over for a sub-task (brainstorming, pr
 
 ### State & Build
 
-**Elango** 📐 — Spec Architect. Works invisibly during discussion — never speaks unless asked. Tracks every decision, open question, action item. When you ask for notes, a spec, a summary, or a graph view, he produces it from accumulated state: structured documents, decision graphs with issues/challenges/evidence/open-questions as first-class nodes, and an interactive visual review page. Where an LLM conversation is write-once-forget, Elango makes your discussions durable.
+**Elango** 📐 — Spec Architect. Works invisibly during discussion — never speaks unless asked. Tracks every decision, open question, action item. When you ask for notes, a spec, or a summary, he produces it from accumulated state: structured markdown documents capturing issues, decisions, challenges, evidence, and open questions. Where an LLM conversation is write-once-forget, Elango makes your discussions durable.
 
 **Sreyash** ⚡ — Builder. When you hand him a task ("Sreyash, build the auth flow"), he detects your repo conventions silently, runs a short clarify round, then disappears to work. Inside, he writes an OpenSpec-style spec grounded in real repo paths, lands red tests, then spawns up to 12 named builders in parallel (harsh-frontend-types, mohan-api-validation, leo-rename-sweep, etc.) with adaptive heartbeats and kill/respawn protocols. Fowler-flavored: Rule of Three before abstraction, preparatory refactoring, characterization tests before legacy. Returns with a short report when done.
 
@@ -127,7 +127,7 @@ A regular LLM conversation is always the same mode: you ask, it answers. Huddle 
 
 **Brainstorming** — "I need ideas" — Elanchezian takes the room through 4 structured phases with anti-bias domain pivoting.
 
-**Spec Review** — "give me the action items" / "write the spec" / "show me the graph" — Elango synthesizes accumulated state into structured output.
+**Spec Review** — "give me the action items" / "write the spec" / "where do we stand" — Elango synthesizes accumulated state into structured output.
 
 **Wrap-Up** — "save and pause" — Persists full state. Resume tomorrow with complete context, active personas restored, new repo activity surfaced.
 
@@ -211,9 +211,10 @@ LLM conversations are ephemeral. Huddle conversations survive.
 
 Decisions and milestones are written as raw event files during the session — one file per event, no merges, no locks. Normal discussion rounds write nothing. When you ask for notes or wrap up, Elango synthesizes everything into:
 
-- **`huddle-state.json`** — machine-readable source of truth, conforms to a documented XML schema. Decisions, issues, challenges, evidence, open questions, participants, key moments, action items.
+- **`huddle-state.json`** — machine-readable source of truth. Decisions, issues, challenges, evidence, open questions, participants, key moments, action items, with cross-references between them.
 - **`YYYY-MM-DD.md`** — daily huddle note with topics, perspectives, rationale, rejected paths.
-- **Interactive graph review** — an HTML page that visualizes the conversation graph: 💡 issues, ✅ decisions, ⚔️ challenges, ❓ open questions, 📚 evidence, with edges linking them (informs, challenges, supports, needs-answer). Includes zoom controls, a Timeline tab with a narrative view, and a Spec tab with the full markdown note. Never auto-opens — only launches when you explicitly say "show me the graph."
+
+Reviews and summaries are text only — there is no diagram or visual review surface.
 
 State lives at `~/.config/muthuishere-agent-skills/{repo}/{branch}/huddle/`. Branch-scoped. Cross-branch aware — it reads what was decided on `main` while you're on your feature branch. Background builder manifests live alongside, namespaced per sibling (`sreyash/`, `hari/`, `harshvardhan/`).
 

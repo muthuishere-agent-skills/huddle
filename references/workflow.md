@@ -54,9 +54,8 @@ State write behavior:
 - during live discussion, NO file writes happen on normal rounds
 - on decisions/milestones: Write tool appends a single raw event JSON file to `raw/` — no Python script, no background process, just a direct file write
 - on explicit ask ("give me notes") or wrap-up: synthesis reads `raw/*.json` + conversation → writes `huddle-state.json` + `.md` → deletes `raw/`
-- use `{PYTHON_BIN}` (detected once in preflight) for script invocations (md_to_html.py, project_state.py, etc.) — never hardcode python3/python
+- use `{PYTHON_BIN}` (detected once in preflight) for script invocations (project_state.py, session_state.py, etc.) — never hardcode python3/python
 
-Graph review behavior:
-- state lives in `huddle-state.json` only — no `graph-raw.json`
-- never auto-open the graph review page; only run `{PYTHON_BIN} scripts/md_to_html.py {note_path}` when {GIT_USER} explicitly asks to see the graph
-- `index.html` derives graph nodes/edges from `decisions[]` client-side
+State review behavior:
+- state lives in `huddle-state.json` only — decisions, open questions, action items, participants, key moments
+- on review requests ("where do we stand?", "give me the notes"), summarize from `huddle-state.json` in conversation and/or the markdown note — text only, no diagrams or visual review surface

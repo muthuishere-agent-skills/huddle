@@ -33,6 +33,9 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import synced_assets  # noqa: E402  (sibling module in scripts/)
+
 SCAN_INTERVAL_DAYS = 7
 CONFIG_ROOT = pathlib.Path.home() / ".config" / "muthuishere-agent-skills"
 PRIORITY_BRANCHES = ("main", "master", "dev", "develop")
@@ -371,6 +374,12 @@ def cmd_snapshot(project_root_str):
         "saved_state": saved_state,
         "raw_events": _list_raw_events(reponame, branch),
         "cross_branch_context": _scan_cross_branch(reponame, branch),
+        # Externally-synced REPO personas (+ their per-persona memories),
+        # visible only in this repo. Producer-agnostic, read-only, file reads
+        # only. Absent dir -> [].
+        "repo_personas": synced_assets.scan_personas(
+            CONFIG_ROOT / reponame / "personas", "synced-repo"
+        ),
     }
 
 

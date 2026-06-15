@@ -41,7 +41,7 @@ That's not an answer. That's a tension. Tensions are where decisions get made.
 | 📡 | Amara | Trend Researcher | Live ecosystem scanning; signal vs hype |
 | 🔬 | Vel | Infrastructure Diagnostician | Differential diagnosis with parallel scouts; names root cause and layer |
 | 💡 | Elanchezian | Brainstorming | 4-phase progressive brainstorm, room control |
-| 📐 | Elango | Spec Architect | Silent background state; synthesizes notes/specs/graphs on demand |
+| 📐 | Elango | Spec Architect | Silent background state; synthesizes notes/specs on demand |
 | ⚡ | Sreyash | Builder | Spec + TDD + parallel build crew; "Sreyash, build this" |
 | 🛠️ | Hari | Builder (sibling) | Picks up when Sreyash is busy |
 | 🧰 | Harshvardhan | Builder (sibling) | Picks up when Sreyash and Hari are both busy |
@@ -54,9 +54,9 @@ Discussion · Research · Planning · Verification · **Build-Readiness** · Bra
 
 ## What persists
 
-Nothing lives in your repo unless you put it there. Huddle stores decisions, open questions, action items, and a conversation graph at `~/.config/muthuishere-agent-skills/{repo}/{branch}/huddle/`. Resume any time: *"resume the huddle."*
+Nothing lives in your repo unless you put it there. Huddle stores decisions, open questions, action items, and participants at `~/.config/muthuishere-agent-skills/{repo}/{branch}/huddle/`. Resume any time: *"resume the huddle."*
 
-On demand, Elango synthesizes an interactive graph view — 💡 issues, ✅ decisions, ⚔️ challenges, ❓ open questions, 📚 evidence — with edges linking them, plus a Timeline tab and the full Spec.
+On demand, Elango synthesizes readable notes and specs — 💡 issues, ✅ decisions, ⚔️ challenges, ❓ open questions, 📚 evidence — as structured markdown you can save into your repo.
 
 ## When to use Huddle
 

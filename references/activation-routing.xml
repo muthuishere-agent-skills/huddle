@@ -11,9 +11,8 @@
     <rule>Rotate persona participation — track who spoke recently and avoid always picking the same pair.</rule>
     <rule>Keep the room small by default. If another persona would help, suggest them to {GIT_USER} and wait for approval before adding them.</rule>
     <rule>Before writing each persona response, re-read that persona's communicationStyle and principles fields. Character consistency depends on this.</rule>
-    <rule>Elango is the underlying background state worker and the source of truth for huddle memory, notes, summaries, specs, and graph review.</rule>
+    <rule>Elango is the underlying background state worker and the source of truth for huddle memory, notes, summaries, and specs.</rule>
     <rule>Elango writes a raw event file (via Write tool) on decisions and milestones only — not every round. Raw event files accumulate in {HUDDLE_DIR}/raw/ until synthesis.</rule>
-    <rule>All presentation semantics for graph review must be derived by Elango from huddle-state.json decisions[] at review time. The HTML review surface must not invent labels, statuses, or participant meaning.</rule>
     <rule>If the conversation shifts from discussion into planning, verification, research, or state review, prefer routing explicitly into that mode instead of forcing everything through the normal discussion loop.</rule>
     <rule>Smart exit must preserve not only the outcome but also the people involved — especially the active personas, the perspectives that informed the outcome, and whether the meeting ended in wrap or pause state.</rule>
     <rule>When searching for current state, relevant context, or latest standing, search across the repo's active state as well as huddle memory — not just the current huddle note.</rule>
@@ -26,11 +25,10 @@
     <rule>Verification mode is for checking whether something is actually complete, sound, tested, safe, or good enough to trust.</rule>
     <rule>Research mode is for latest-signals discovery, ecosystem scanning, evidence gathering, and source-backed findings.</rule>
     <rule>Spec-review mode is for Elango-led notes, summaries, specs, history view, action items, and current-state review.</rule>
-    <rule>Wrap-up mode is for saving, pausing, closing, and optional post-meeting rendered review.</rule>
+    <rule>Wrap-up mode is for saving, pausing, and closing the meeting.</rule>
     <rule>Build-readiness mode is for pressure-testing a chosen direction before implementation — catching architecture, backend, and test gaps early so multi-person build doesn't collide mid-sprint. It is opt-in, not a default phase.</rule>
     <rule>When a decision clearly reaches closure, Elango may briefly surface with: "We've decided this. Want to have a look?"</rule>
-    <rule>If {GIT_USER} asks where things stand, show the current huddle document through Elango's review flow rather than answering only from transient conversational context.</rule>
-    <rule>The readable graph is request-driven. Derive it only for explicit review, status checks, decision check-ins, or wrap-up review.</rule>
+    <rule>If {GIT_USER} asks where things stand, summarize the current huddle state (huddle-state.json + conversation) as text rather than answering only from transient conversational context.</rule>
     <rule>When entering wrap-up mode, carry forward the currently active personas and the perspectives that most directly informed the meeting state so resume has human context, not just raw conclusions.</rule>
     <rule>Current-state review should consider repo work state, current branch huddle state, recent branch history, and relevant sibling-branch summaries together.</rule>
   </state-management>
@@ -154,15 +152,15 @@
 
     <route id="status-review" mode="spec-review">
       <when>where do we stand, show me the huddle, show me the meeting, open the notes, let me see the current document, show me current state, open the huddle notes, open the meeting notes, let me have a look, show the current notes</when>
-      <goal>Route to Elango's review flow. Summarize current state in conversation from huddle-state.json. Do NOT auto-open the graph review page — only open it if {GIT_USER} explicitly asks to see the graph.</goal>
+      <goal>Route to Elango's review flow. Summarize current state in conversation from huddle-state.json as text.</goal>
       <steps>
-        <step ref="steps/step-02-discussion.md">Run Elango's state-review behavior and summarize in conversation. Only open graph if explicitly asked.</step>
+        <step ref="steps/step-02-discussion.md">Run Elango's state-review behavior and summarize in conversation.</step>
       </steps>
     </route>
 
     <route id="completion-review" mode="spec-review">
-      <when>we decided this, show me what we decided, let me review the decision, want to have a look, show me the decision flow, show me the rationale</when>
-      <goal>After a clear decision reaches closure, let Elango surface the decision, rationale, and optional Mermaid flow for user review.</goal>
+      <when>we decided this, show me what we decided, let me review the decision, want to have a look, show me the rationale</when>
+      <goal>After a clear decision reaches closure, let Elango surface the decision and rationale as text for user review.</goal>
       <steps>
         <step ref="steps/step-02-discussion.md">Use Elango's decision check-in and review behavior.</step>
       </steps>
@@ -170,17 +168,17 @@
 
     <route id="wrap-up" mode="wrap-up">
       <when>that's enough, let's stop, good for now, end meeting, wrap up, close the meeting, we're done, save and pause, let's pause here, stop here for today</when>
-      <goal>Summarize what was covered and decided by {GIT_USER}, capture which personas and perspectives shaped the outcome, persist state, treat pause as a first-class exit path, and optionally allow rendered review of the final huddle notes.</goal>
+      <goal>Summarize what was covered and decided by {GIT_USER}, capture which personas and perspectives shaped the outcome, persist state, and treat pause as a first-class exit path.</goal>
       <steps>
-        <step ref="steps/step-03-smart-exit.md">Summarize, save decisions and action items, persist state, and support visual review when asked.</step>
+        <step ref="steps/step-03-smart-exit.md">Summarize, save decisions and action items, and persist state.</step>
       </steps>
     </route>
 
     <route id="review-after-wrap" mode="wrap-up">
       <when>show me the final notes, open the final summary, let me review before we close, open the wrap-up notes</when>
-      <goal>After or during wrap-up, only open the graph review page if {GIT_USER} explicitly asks to see the graph. Otherwise summarize in conversation.</goal>
+      <goal>After or during wrap-up, summarize the final huddle notes in conversation as text.</goal>
       <steps>
-        <step ref="steps/step-03-smart-exit.md">Only launch the browser review bundle if {GIT_USER} explicitly requests the graph.</step>
+        <step ref="steps/step-03-smart-exit.md">Summarize the final notes in conversation.</step>
       </steps>
     </route>
 
@@ -221,7 +219,7 @@
     <rule>If {GIT_USER} asks for a spec, notes, summary, or action items, route to Elango's spec-review mode rather than treating it as another persona round.</rule>
     <rule>If {GIT_USER} asks where things stand, prefer Elango's status-review route over ad hoc conversational recap.</rule>
     <rule>If a decision just reached closure and the user appears ready to inspect it, prefer the completion-review route and let Elango offer: "We've decided this. Want to have a look?"</rule>
-    <rule>Never auto-open the graph review page. Only launch `md_to_html.py` and open the browser when {GIT_USER} explicitly asks to see the graph (e.g. "show me the graph", "open the graph", "open the review page"). For all other status/review requests, summarize in conversation.</rule>
+    <rule>All status/review requests are answered by summarizing huddle-state.json and conversation as text. There is no visual review surface or diagram output.</rule>
     <rule>If planning, verification, and discussion all seem plausible, choose the narrowest mode that matches the user's primary intent instead of blending them prematurely.</rule>
     <rule>If {GIT_USER} is about to hand a direction into implementation — language like "let's build this", "let's start", "ship it", "hand this to dev" — offer the build-readiness route once ("Want Suren, Shaama, and Nina to pressure-test this before we build?") and route only if they accept. Never block implementation.</rule>
     <rule>When routing to wrap-up, do not reduce the exit to a generic summary; preserve who was active, which perspectives mattered, and whether the exit is a pause or a true close.</rule>

@@ -11,7 +11,7 @@ This step runs as a loop — once per message from `{GIT_USER}`.
     <mode id="verification">Use when the user wants to pressure-test completeness, soundness, confidence, or truth of a claim.</mode>
     <mode id="research">Use when freshness, latest signals, or source-backed ecosystem research are central.</mode>
     <mode id="brainstorming">Use when {GIT_USER} wants to brainstorm, ideate, or explore options. Elanchezian takes the room as a sub-task via step-elanchezian-brainstorm.md.</mode>
-    <mode id="spec-review">Use for Elango-led notes, summaries, specs, action items, and graph review.</mode>
+    <mode id="spec-review">Use for Elango-led notes, summaries, specs, and action items.</mode>
   </modes>
 
   <selection-rules>
@@ -28,21 +28,18 @@ This step runs as a loop — once per message from `{GIT_USER}`.
     <rule>Elango silently reads huddle-state.json first, then updates it with decisions, rationale, rejected paths, action items, participants, key moments, and open questions.</rule>
 
     <rule>If a decision reaches closure, Elango may briefly offer review: "We've decided this. Want to have a look?"</rule>
-    <rule>If {GIT_USER} asks where things stand, summarize from huddle-state.json in conversation — do NOT auto-open the graph review page. Only run md_to_html.py and open the browser when {GIT_USER} explicitly asks to see the graph (e.g. "show me the graph", "open the graph", "open the review page").</rule>
-    <rule>When producing notes, summary, spec, or graph views, Elango may include Mermaid decision flow when it adds signal.</rule>
-    <rule>Generate the graph view only when a visual review is needed — not on every turn.</rule>
+    <rule>If {GIT_USER} asks where things stand, summarize from huddle-state.json in conversation. There is no visual review surface — notes and summaries are text only.</rule>
   </elango-rules>
 
   <state-rules>
     <rule>Do NOT write huddle-state.json or the huddle note after each exchange. Fire huddle_writer.py in background on decisions and milestones only.</rule>
     <rule>Raw event files accumulate in {HUDDLE_DIR}/raw/. Synthesis into huddle-state.json and .md happens only on explicit ask or wrap-up.</rule>
-    <rule>huddle-state.json is the only synthesized state file. No graph-raw.json.</rule>
+    <rule>huddle-state.json is the only synthesized state file.</rule>
     <rule>On synthesis, build complete: decisions[], participants[], key_moments[], open_questions[], action_items[], issues[], challenges[], evidence[], current_topic, latest_summary, active_personas. Issues/challenges/evidence are extracted from each decision's rationale prose + conversation context at synthesis time — they are NOT written as separate raw events.</rule>
     <rule>When writing a raw decision event, the rationale field is a short prose paragraph (3-8 sentences) that names the issues that framed the choice, the personas who challenged it and what they said, and any evidence or authors/refs cited. Write prose, not a typed envelope. Synthesis will extract structure from it later.</rule>
-    <rule>Raw decision events (raw/*_decision.json) are FREE-FORM — no schema. Personas/Claude write loose prose (topic, decision, rationale paragraph, minimal metadata) as the raw event on disk. The graph schema does NOT apply to raw events.</rule>
-    <rule>At synthesis only (wrap-up or explicit ask), the produced huddle-state.json MUST conform to `references/graph-schema.xml` — that's what docs/index.html renders. Cross-refs (linked_issues, challenges.targets, evidence.linked_decisions, open_questions.targets) must resolve to real ids in the same state. Do not fabricate empty arrays into populated shapes — leave empty if nothing in rationale supports them.</rule>
+    <rule>Raw decision events (raw/*_decision.json) are FREE-FORM — no schema. Personas/Claude write loose prose (topic, decision, rationale paragraph, minimal metadata) as the raw event on disk.</rule>
+    <rule>At synthesis only (wrap-up or explicit ask), the produced huddle-state.json must be internally consistent: cross-refs (linked_issues, challenges.targets, evidence.linked_decisions, open_questions.targets) must resolve to real ids in the same state. Do not fabricate empty arrays into populated shapes — leave empty if nothing in rationale supports them.</rule>
     <rule>When a decision is recorded in a raw event, include personas involved in the event JSON.</rule>
-    <rule>Generate graph review only when a visual review is needed — not on every turn.</rule>
   </state-rules>
 </step-policy>
 
@@ -63,11 +60,9 @@ This step runs as a loop — once per message from `{GIT_USER}`.
 
 ## Persona Roster
 
-The lightweight roster lives in:
+At runtime the roster source of truth is the **merged roster built in step-01** — built-ins (`{skill-root}/references/persona-roster.xml`) plus any externally-synced personas (`GLOBAL_STATE.synced_personas_global` + `PROJECT_STATE.repo_personas`), with precedence built-in < synced-global < synced-repo. Selection and disambiguation operate over that merged set, not solely the bundled XML. A synced persona is selected, voiced, and grounded exactly like a built-in; its body and per-persona memories load on demand from the synced `file` paths.
 
-`{skill-root}/references/persona-roster.xml`
-
-Use that file as the roster source of truth for:
+The bundled XML still provides the lightweight metadata for built-ins:
 - icon
 - display name
 - title
@@ -223,7 +218,7 @@ If the round clearly completed the user's current objective, you may instead end
 When `{GIT_USER}` makes a call:
 - If the decision clearly reached closure, Elango may surface briefly with:
   `We've decided this. Want to have a look?`
-- If `{GIT_USER}` wants to review the current state, run synthesis (Step 9) and summarize in conversation. Do NOT auto-open the graph review page.
+- If `{GIT_USER}` wants to review the current state, run synthesis (Step 9) and summarize in conversation.
 
 **Do NOT write to huddle-state.json or the huddle note here.** Instead, use the Write tool to append a raw event file directly:
 
@@ -266,7 +261,7 @@ This is invisible to `{GIT_USER}` — no output, no interruptions, no file I/O o
 
 ## Step 9: Elango — Synthesis on Demand
 
-When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph review — OR during wrap-up:
+When `{GIT_USER}` asks for notes, a spec, a summary, or action items — OR during wrap-up:
 
 **Synthesis process:**
 
@@ -283,29 +278,25 @@ When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph revi
    Dedupe across decisions. If rationale prose doesn't mention any of these, leave the array empty — do not fabricate.
 4. Write today's huddle note `{HUDDLE_NOTE_FILE}` in the Meeting Document Shape below
 5. Delete all files in `{HUDDLE_DIR}/raw/` (they've been synthesized)
-6. Do NOT auto-open the graph review page. Only run `{PYTHON_BIN} {SKILL_ROOT}/scripts/md_to_html.py {HUDDLE_NOTE_FILE}` when {GIT_USER} explicitly asks to see the graph.
 
 **What triggers synthesis:**
 
 | User says | Action |
 |---|---|
 | "give me the notes" / "capture this" / "take notes" | Synthesize from raw + conversation, write `.md` + `huddle-state.json`, present to user |
-| "where do we stand?" / "open the huddle" | Synthesize, summarize in conversation. Do NOT open graph. |
-| "show me the graph" / "open the graph" / "open the review page" | Synthesize, then launch graph review in browser (ONLY trigger for opening graph) |
+| "where do we stand?" / "open the huddle" | Synthesize, summarize in conversation |
 | "create a spec" / "write the spec" | Synthesize, then produce structured spec format |
 | wrap-up / exit | Synthesize as part of step-03 exit flow |
 
 **Output rules:**
 
 1. **Elango speaks** — "Here's what I captured." — and produces the requested format
-2. Include context, rationale, and decision flow when they help a future reader understand the discussion
-3. If the discussion had meaningful branching, dependencies, or tradeoffs, include a Mermaid decision graph
-4. If user asks where things stand, derive the readable graph plus a readable summary
-5. If user asks for a spec, synthesize all accumulated state into structured spec format
-6. If gaps exist (e.g., no NFR discussion happened), flag them: "Note: the meeting didn't cover X"
-7. Prefer `flowchart TD` Mermaid for decision graphs unless another Mermaid shape is clearly better
-8. **Present to `{GIT_USER}`** for review
-9. If `{GIT_USER}` says "save it" / "put it in the repo" → save to `{project-root}/docs/specs/{feature-name}.md`
+2. Include context, rationale, and decision flow in prose when they help a future reader understand the discussion
+3. If user asks where things stand, give a readable text summary
+4. If user asks for a spec, synthesize all accumulated state into structured spec format
+5. If gaps exist (e.g., no NFR discussion happened), flag them: "Note: the meeting didn't cover X"
+6. **Present to `{GIT_USER}`** for review
+7. If `{GIT_USER}` says "save it" / "put it in the repo" → save to `{project-root}/docs/specs/{feature-name}.md`
 
 ## Meeting Document Shape
 
@@ -325,15 +316,6 @@ When `{GIT_USER}` asks for notes, a spec, a summary, action items, or graph revi
 **Why:** ...
 **Rejected paths:** ...
 **Open questions:** ...
-
-## Decision Flow
-
-```mermaid
-flowchart TD
-    A[Topic raised] --> B[Main tradeoff]
-    B --> C[Decision by {GIT_USER}]
-    B --> D[Open question]
-```
 
 ## Action Items
 

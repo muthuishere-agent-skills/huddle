@@ -25,9 +25,21 @@ Store as `{SESSION_CONTEXT}`. Empty if nothing preceded the trigger.
 
 ## Load Persona Roster
 
-Use `{PERSONA_ROSTER}` = `GLOBAL_STATE.persona_roster_xml`. It's the lightweight roster source of truth: `id`, `icon`, `name`, `title`, `domains`, persona file reference.
+Build `{PERSONA_ROSTER}` by **merging three producer-agnostic sources**, most specific wins on `id`:
 
-Do not load full persona body files during init. Only load the full persona file for the 2-3 personas selected for the current round, plus any persona explicitly named by `{GIT_USER}`.
+1. **Built-ins** — `GLOBAL_STATE.persona_roster_xml` (the bundled roster).
+2. **Synced global** — `GLOBAL_STATE.synced_personas_global` (applies in every repo).
+3. **Synced repo** — `PROJECT_STATE.repo_personas` (applies only in this repo).
+
+**Precedence: built-in < synced-global < synced-repo.** A synced persona with a *new* `id` is added to the available roster. A synced persona reusing a built-in `id` *overrides* that built-in's metadata and body path. Sources 2 and 3 are read from disk and reflect whatever any external tool/CLI/agent last synced — the skill never writes them.
+
+Each synced entry carries `id`, `name`, `title`, `icon`, `domains`, a `file` (absolute path to the synced definition `.md`, or `null` when the entry only augments a built-in with memories), and a `memories` index (each: `title`, `tags`, `corpus`, `persona`, `file`).
+
+Do not load full persona body files during init. Only load the full persona file for the 2-3 personas selected for the current round, plus any persona explicitly named by `{GIT_USER}`. For a **synced** persona, load the body from its `file` path (an absolute synced path) instead of `references/personas/{file}`; when a synced entry overrides a built-in, prefer the synced `file` if present, else fall back to the built-in body.
+
+### Per-persona memories (grounding)
+
+A persona may carry its own `memories` (synced global + synced repo, repo listed after global). These are read-only grounding — *what this persona has already seen or decided*. Treat them like the on-demand persona body: surface a selected persona's memory **titles/tags** as available context, and **load a memory's body from its `file` path only on demand** when that persona's point relates to it. Per-persona memories never change flow control or the stop-and-wait rule, and are never written back or synthesized into `huddle-state.json` / `raw/`.
 
 ## Surface Warnings (all paths)
 

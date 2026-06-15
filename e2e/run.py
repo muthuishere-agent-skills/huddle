@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Smoke-test huddle state and review scripts end to end."""
+"""Smoke-test huddle state and synced-asset scripts end to end."""
 
 from __future__ import annotations
 
-import base64
-import gzip
 import json
 import shutil
 import os
@@ -25,70 +23,9 @@ def run(cmd: list[str], cwd: Path | None = None, env: dict | None = None) -> str
     return result.stdout.strip()
 
 
-def decode_hash(url: str) -> dict:
-    hash_value = url.split("#", 1)[1]
-    padding = "=" * ((4 - len(hash_value) % 4) % 4)
-    raw = base64.urlsafe_b64decode(hash_value + padding)
-    return json.loads(gzip.decompress(raw).decode("utf-8"))
-
-
-SAMPLE_STATE = {
-    "reponame": "huddle",
-    "branch": "main",
-    "last_huddle_date": "2026-04-05",
-    "current_topic": "Should we simplify Elango's state model?",
-    "open_questions": ["How does LLM generate graph view reliably?"],
-    "action_items": ["Update elango-specwriter.md"],
-    "latest_summary": "Decided to drop graph-raw.json in favour of huddle-state.json",
-    "active_personas": ["suren", "babu"],
-    "decisions": [
-        {
-            "id": "d-1",
-            "topic": "Simplify Elango state model",
-            "status": "closed",
-            "decision": "Drop graph-raw.json, derive graph from huddle-state.json",
-            "rationale": "Simpler state means Elango reliably captures decisions every round",
-            "rejected_paths": ["Keep graph-raw.json as always-on"],
-            "personas_involved": [
-                {"id": "suren", "name": "Suren", "icon": "🏛️", "meta": "Architect"},
-                {"id": "babu", "name": "Babu", "icon": "🎯", "meta": "Demand Reality"},
-            ],
-            "linked_topics": ["d-2"],
-            "evidence": [
-                {
-                    "ref": "https://github.com/m-agentic-skills/huddle/tree/main",
-                    "label": "",
-                    "note": "Source branch for this discussion",
-                }
-            ],
-        },
-        {
-            "id": "d-2",
-            "topic": "Evidence tracking",
-            "status": "open",
-            "decision": "",
-            "rationale": "",
-            "rejected_paths": [],
-            "personas_involved": [],
-            "linked_topics": [],
-            "evidence": [
-                {
-                    "ref": "https://github.com/m-agentic-skills/huddle/issues/12",
-                    "label": "",
-                    "note": "Related issue on evidence schema",
-                }
-            ],
-        },
-    ],
-    "participants": [
-        {"id": "suren", "name": "Suren", "icon": "🏛️", "meta": "Architect", "influence": "Proposed read-before-write rule"},
-        {"id": "babu", "name": "Babu", "icon": "🎯", "meta": "Demand Reality", "influence": "Flagged event schema complexity"},
-    ],
-    "key_moments": [
-        {"id": "m-1", "icon": "💬", "title": "graph-raw.json complexity raised", "detail": "Event schema too rigid for LLM"},
-        {"id": "m-2", "icon": "✅", "title": "Decision: derive graph from huddle-state.json", "detail": "index.html handles derivation client-side"},
-    ],
-}
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def test_global_state(home: Path) -> None:
@@ -98,6 +35,8 @@ def test_global_state(home: Path) -> None:
     assert first["git_user"], "git_user not resolved"
     assert "gh_available" in first, "gh_available missing"
     assert "<persona-roster" in first["persona_roster_xml"], "persona roster missing"
+    # t5 (regression): no synced personas dir -> empty list, key present
+    assert first["synced_personas_global"] == [], "synced_personas_global should be [] with no synced dir"
 
     uc = home / ".config" / "muthuishere-agent-skills" / "userconfig.json"
     assert uc.exists(), "userconfig.json not written"
@@ -147,6 +86,8 @@ def test_project_state_snapshot(home: Path, tmp: Path) -> None:
     branches = [e["branch"] for e in snap["cross_branch_context"]]
     assert branches == ["feature-x"], f"unexpected cross-branch list: {branches}"
     assert snap["project_docs_found"] == [], "no docs were added, list should be empty"
+    # t5 (regression): no synced repo personas dir -> empty list, key present
+    assert snap["repo_personas"] == [], "repo_personas should be [] with no synced dir"
     print("  [ok] project_state snapshot — identity, raw events, cross-branch, saved_state")
 
 
@@ -215,59 +156,101 @@ def test_session_state(home: Path, tmp: Path) -> None:
     print("  [ok] session_state — live probes + note ensured")
 
 
-def test_md_to_html(sample: Path) -> None:
-    note = sample / "2026-04-05.md"
-    note.write_text("# Huddle\n\n## Topics Discussed\n\nElango state simplification.\n", encoding="utf-8")
+def test_synced_personas_global(home: Path) -> None:
+    """t1 (definition), t3 (memories), t4 (built-in id-clash), t6 (malformed non-fatal)."""
+    personas = home / ".config" / "muthuishere-agent-skills" / "personas"
 
-    state_path = sample / "huddle-state.json"
-    state_path.write_text(json.dumps(SAMPLE_STATE, ensure_ascii=False), encoding="utf-8")
+    # t1: a global synced persona with a definition file
+    _write(
+        personas / "bharath" / "bharath.md",
+        "---\n"
+        "name: acme-billing-expert\n"
+        "displayName: Bharath\n"
+        "title: Billing Domain Expert\n"
+        'icon: "💳"\n'
+        "domains: [billing, proration, revenue]\n"
+        "---\n\n## Signature Phrases\n- \"Does the money reconcile?\"\n",
+    )
+    # t3: a per-persona memory under that persona
+    _write(
+        personas / "bharath" / "memories" / "q3-pricing.md",
+        "---\ntitle: Q3 pricing decision\ntags: [pricing, gtm]\ncorpus: acme-finance\n"
+        "---\nPro stays at $40/seat through Q3.\n",
+    )
+    # t4: id-clash with a built-in — memory-only augmentation, no definition
+    _write(
+        personas / "shaama" / "memories" / "oncall.md",
+        "---\ntitle: The 2am cache stampede\ntags: [reliability]\n---\nNever cache without jitter.\n",
+    )
+    # t6: a malformed file in its own persona dir must not abort the scan
+    _write(personas / "broken" / "broken.md", "not: [valid frontmatter\nno closing")
 
-    url = run(
-        [
-            "python3", "scripts/md_to_html.py", str(note),
-            "https://m-agentic-skills.github.io/huddle/index.html",
-        ],
-        cwd=ROOT,
+    out = run(["python3", "scripts/global_state.py"], cwd=ROOT, env={"HOME": str(home)})
+    snap = json.loads(out)
+    synced = {p["id"]: p for p in snap["synced_personas_global"]}
+
+    # t1
+    assert "bharath" in synced, "global synced persona not listed"
+    b = synced["bharath"]
+    assert b["name"] == "Bharath", f"displayName not mapped: {b['name']}"
+    assert b["title"] == "Billing Domain Expert"
+    assert b["icon"] == "💳", "quoted icon not parsed"
+    assert b["domains"] == ["billing", "proration", "revenue"], f"inline list wrong: {b['domains']}"
+    assert b["source"] == "synced-global"
+    assert b["file"] and b["file"].endswith("personas/bharath/bharath.md"), f"bad file: {b['file']}"
+
+    # t3
+    assert len(b["memories"]) == 1, f"expected 1 memory, got {len(b['memories'])}"
+    mem = b["memories"][0]
+    assert mem["title"] == "Q3 pricing decision"
+    assert mem["tags"] == ["pricing", "gtm"]
+    assert mem["corpus"] == "acme-finance"
+    assert mem["persona"] == "bharath"
+    assert mem["file"].endswith("memories/q3-pricing.md")
+
+    # t4 — built-in id reused, memory-only (file is None so step-01 keeps built-in body)
+    assert "shaama" in synced, "built-in augmentation entry missing"
+    assert synced["shaama"]["file"] is None, "memory-only entry should have file=None"
+    assert len(synced["shaama"]["memories"]) == 1, "built-in augmentation memory missing"
+
+    # t6 — malformed file is non-fatal; the good entries are still returned
+    assert "bharath" in synced and "shaama" in synced, "good entries lost due to malformed file"
+
+    print("  [ok] synced personas (global) — t1 definition, t3 memories, t4 id-clash, t6 malformed non-fatal")
+
+
+def test_synced_personas_repo(home: Path, tmp: Path) -> None:
+    """t2 — repo-scoped personas are visible only in their own repo."""
+    project = tmp / "repo-with-personas"
+    project.mkdir(parents=True, exist_ok=True)
+    rpersonas = home / ".config" / "muthuishere-agent-skills" / "repo-with-personas" / "personas"
+    _write(
+        rpersonas / "vidya" / "vidya.md",
+        "---\ndisplayName: Vidya\ntitle: Repo Analyst\n"
+        'icon: "🔍"\ndomains: [repo, analysis]\n---\nbody\n',
     )
 
-    assert "#" in url, "URL missing hash fragment"
+    out = run(
+        ["python3", "scripts/project_state.py", "snapshot", str(project)],
+        cwd=ROOT, env={"HOME": str(home)},
+    )
+    snap = json.loads(out)
+    repo_p = {p["id"]: p for p in snap["repo_personas"]}
+    assert "vidya" in repo_p, "repo persona not returned in its own repo"
+    assert repo_p["vidya"]["source"] == "synced-repo"
+    assert repo_p["vidya"]["file"].endswith("personas/vidya/vidya.md")
 
-    bundle = decode_hash(url)
-    assert bundle["source"] == "2026-04-05.md", f"wrong source: {bundle['source']}"
-    assert "markdown" in bundle, "bundle missing markdown"
-    assert "state" in bundle, "bundle missing state"
-    assert "view" not in bundle, "bundle should not contain pre-derived view"
-    assert "raw" not in bundle, "bundle should not contain raw"
+    # isolation: a different repo must not see it
+    other = tmp / "other-repo"
+    other.mkdir(parents=True, exist_ok=True)
+    out2 = run(
+        ["python3", "scripts/project_state.py", "snapshot", str(other)],
+        cwd=ROOT, env={"HOME": str(home)},
+    )
+    snap2 = json.loads(out2)
+    assert snap2["repo_personas"] == [], "a different repo must not see another repo's personas"
 
-    state = bundle["state"]
-    assert len(state["decisions"]) == 2, f"expected 2 decisions, got {len(state['decisions'])}"
-    assert state["decisions"][0]["id"] == "d-1"
-    assert state["decisions"][0]["status"] == "closed"
-    assert state["decisions"][1]["id"] == "d-2"
-    assert state["decisions"][1]["status"] == "open"
-
-    d1_evidence = state["decisions"][0]["evidence"]
-    assert len(d1_evidence) == 1, f"expected 1 evidence on d-1, got {len(d1_evidence)}"
-    assert "github.com" in d1_evidence[0]["ref"], "d-1 evidence ref wrong"
-
-    d2_evidence = state["decisions"][1]["evidence"]
-    assert len(d2_evidence) == 1, f"expected 1 evidence on d-2, got {len(d2_evidence)}"
-    assert "issues/12" in d2_evidence[0]["ref"], "d-2 evidence ref wrong"
-
-    assert len(state["participants"]) == 2
-    assert state["participants"][0]["id"] == "suren"
-    assert state["participants"][1]["id"] == "babu"
-
-    assert len(state["key_moments"]) == 2
-    assert state["key_moments"][0]["id"] == "m-1"
-    assert state["key_moments"][1]["id"] == "m-2"
-
-    print("  [ok] md_to_html — state bundle correct, evidence in decisions, no raw/view")
-
-
-def test_graph_state_py_removed() -> None:
-    assert not (ROOT / "scripts" / "graph_state.py").exists(), "graph_state.py still exists"
-    print("  [ok] graph_state.py removed")
+    print("  [ok] synced personas (repo) — t2 repo-scoped + cross-repo isolation")
 
 
 def test_migrate_legacy_config(home: Path) -> None:
@@ -295,10 +278,11 @@ def main() -> int:
     home_global = tmp_root / "home-global"
     home_project = tmp_root / "home-project"
     home_session = tmp_root / "home-session"
+    home_synced = tmp_root / "home-synced"
+    home_synced_repo = tmp_root / "home-synced-repo"
     migrate_home = tmp_root / "migrate-home"
-    sample = tmp_root / "sample"
     tmp_projects = tmp_root / "projects"
-    for p in (home_global, home_project, home_session, migrate_home, sample, tmp_projects):
+    for p in (home_global, home_project, home_session, home_synced, home_synced_repo, migrate_home, tmp_projects):
         p.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -307,8 +291,8 @@ def main() -> int:
         test_project_state_snapshot(home_project, tmp_projects)
         test_project_state_doc_detection(home_project, tmp_projects)
         test_session_state(home_session, tmp_projects)
-        test_md_to_html(sample)
-        test_graph_state_py_removed()
+        test_synced_personas_global(home_synced)
+        test_synced_personas_repo(home_synced_repo, tmp_projects)
         test_migrate_legacy_config(migrate_home)
         print("\ne2e ok")
         return 0
