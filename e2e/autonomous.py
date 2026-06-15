@@ -144,6 +144,124 @@ def test_trail(home: Path) -> None:
     print("  [ok] trail — grouped by round, owner-last order, completeness flag")
 
 
+# ── S3: owner-weighted vote + dissent + verdict + fork ─────────────────────
+def _room(home: Path, sid: str, personas=("arasan", "shaama", "nina", "dileep")) -> str:
+    out = run([
+        "init", str(home / "hud-s3"),
+        "--question", "Ship the queue on SQLite or Postgres?",
+        "--owner", "arasan", "--personas", ",".join(personas), "--rounds", "3",
+        "--session-id", sid,
+    ])
+    return out["session_dir"]
+
+
+def _vote(sdir, persona, position, conf, reason="r"):
+    run(["vote", sdir, "--persona", persona, "--position", position,
+         "--confidence", str(conf), "--reason", reason])
+
+
+def test_owner_tiebreak(home: Path) -> None:
+    """Owner ties at the top -> owner's position wins, no override."""
+    sdir = _room(home, "tie")
+    _vote(sdir, "shaama", "sqlite", 0.9)
+    _vote(sdir, "nina", "postgres", 0.9)
+    _vote(sdir, "dileep", "postgres", 0.0)   # weak
+    _vote(sdir, "arasan", "sqlite", 0.9)     # owner -> sqlite ties postgres at 0.9
+    out = run(["tally", sdir])
+    assert out["resolved"] == "sqlite", f"owner should win the tie: {out}"
+    assert out["owner_overridden"] is False
+    print("  [ok] tally — owner breaks a top tie toward its own position")
+
+
+def test_room_override(home: Path) -> None:
+    """A single non-owner option strictly dominates -> room overrides the owner."""
+    sdir = _room(home, "override")
+    _vote(sdir, "shaama", "postgres", 0.9)
+    _vote(sdir, "nina", "postgres", 0.9)
+    _vote(sdir, "dileep", "postgres", 0.8)   # postgres = 2.6
+    _vote(sdir, "arasan", "sqlite", 0.7)     # owner alone, 0.7
+    out = run(["tally", sdir])
+    assert out["resolved"] == "postgres", f"room should override: {out}"
+    assert out["owner_overridden"] is True
+    owner_dissent = [d for d in out["dissents"] if d["persona"] == "arasan"]
+    assert owner_dissent and owner_dissent[0]["position"] == "sqlite", \
+        "overridden owner must be recorded as a dissent"
+    print("  [ok] tally — decisive room overrides owner, owner's dissent recorded")
+
+
+def test_owner_not_top_but_tie(home: Path) -> None:
+    """Owner below a TIE of non-owner options -> owner still wins (breaks tie)."""
+    sdir = _room(home, "notoptie")
+    _vote(sdir, "shaama", "postgres", 0.6)
+    _vote(sdir, "nina", "mysql", 0.6)        # postgres & mysql tie at top (0.6)
+    _vote(sdir, "dileep", "sqlite", 0.0)
+    _vote(sdir, "arasan", "sqlite", 0.5)     # owner below top, but top is a tie
+    out = run(["tally", sdir])
+    assert out["resolved"] == "sqlite", f"owner breaks non-owner tie: {out}"
+    assert out["owner_overridden"] is False
+    print("  [ok] tally — non-owner tie at top still resolves to the owner")
+
+
+def test_tally_guards(home: Path) -> None:
+    sdir = _room(home, "guards")
+    run(["tally", sdir], expect_ok=False)            # no votes yet
+    _vote(sdir, "shaama", "sqlite", 0.5)
+    run(["tally", sdir], expect_ok=False)            # owner hasn't voted
+    run(["vote", sdir, "--persona", "shaama", "--position", "x",
+         "--confidence", "0.5"], expect_ok=False)     # double vote
+    run(["vote", sdir, "--persona", "shaama", "--position", "x",
+         "--confidence", "2"], expect_ok=False)        # confidence out of range
+    print("  [ok] vote/tally — guards: owner-must-vote, no double-vote, conf range")
+
+
+def test_fork_check(home: Path) -> None:
+    sdir = _room(home, "fork")
+    clean = run(["fork-check", sdir, "--decision", "use sqlite", "--flags", ""])
+    assert clean["escalate"] is False
+    for flag in ("launch", "spend", "irreversible", "legal", "security", "scope"):
+        out = run(["fork-check", sdir, "--decision", "d", "--flags", flag])
+        assert out["escalate"] is True, f"{flag} must escalate"
+    mixed = run(["fork-check", sdir, "--decision", "d", "--flags", "spend,banana"])
+    assert mixed["escalate"] is True and "banana" in mixed["unknown_flags"]
+    print("  [ok] fork-check — each owner-fork flag escalates, clean case doesn't")
+
+
+def test_verdict_decided_and_escalated(home: Path) -> None:
+    # decided path
+    sdir = _room(home, "decided")
+    for r in (1, 2, 3):
+        for pid in ("shaama", "nina", "dileep", "arasan"):
+            run(["record-turn", sdir, "--round", str(r), "--persona", pid,
+                 "--why", ";".join(["w"] * (2 + r)), "--stance", "sqlite"])
+    _vote(sdir, "shaama", "sqlite", 0.8)
+    _vote(sdir, "nina", "sqlite", 0.6)
+    _vote(sdir, "dileep", "postgres", 0.5, "scale later")
+    _vote(sdir, "arasan", "sqlite", 0.9)
+    out = run(["verdict", sdir, "--decision", "Ship on SQLite (WAL) now",
+               "--summary", "reversible, fastest to value"])
+    assert out["status"] == "decided" and out["actionable"] is True
+    vj = json.loads((Path(sdir) / "verdict.json").read_text())
+    assert vj["tally"]["resolved"] == "sqlite"
+    assert any(d["persona"] == "dileep" for d in vj["tally"]["dissents"]), "dissent missing"
+    assert len(vj["rationale_trail"]) == 3, "trail rounds missing from verdict"
+    assert (Path(sdir) / "verdict.md").exists()
+
+    # escalated path (owner-level fork)
+    sdir2 = _room(home, "escalated")
+    _vote(sdir2, "shaama", "launch", 0.8)
+    _vote(sdir2, "nina", "launch", 0.7)
+    _vote(sdir2, "dileep", "launch", 0.6)
+    _vote(sdir2, "arasan", "launch", 0.9)
+    out2 = run(["verdict", sdir2, "--decision", "Publish the OSS repo publicly",
+                "--flags", "launch,irreversible"])
+    assert out2["status"] == "escalated" and out2["actionable"] is False, \
+        "owner-level fork must not be actionable headlessly"
+    assert out2["escalation"]["required"] is True
+    md = (Path(sdir2) / "verdict.md").read_text()
+    assert "OWNER-LEVEL FORK" in md, "escalation warning missing from verdict.md"
+    print("  [ok] verdict — decided=actionable w/ trail+dissents; escalated=staged, not actionable")
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="huddle-auton-"))
     try:
@@ -156,6 +274,12 @@ def main() -> int:
         test_record_turn_depth(home)
         test_round_monotonicity(home)
         test_trail(home)
+        test_owner_tiebreak(home)
+        test_room_override(home)
+        test_owner_not_top_but_tie(home)
+        test_tally_guards(home)
+        test_fork_check(home)
+        test_verdict_decided_and_escalated(home)
         print("\nautonomous ok")
         return 0
     except AssertionError as exc:

@@ -194,6 +194,196 @@ def cmd_trail(a: argparse.Namespace) -> dict:
     }
 
 
+# ── vote ───────────────────────────────────────────────────────────────────
+def cmd_vote(a: argparse.Namespace) -> dict:
+    session = load_session(a.session_dir)
+    if a.persona not in session["personas"]:
+        die(f"persona '{a.persona}' is not in this room: {session['personas']}")
+    if not (0.0 <= a.confidence <= 1.0):
+        die(f"confidence must be 0..1, got {a.confidence}")
+    if not a.position.strip():
+        die("a vote needs a position (the option being voted for)")
+    if any(v["persona"] == a.persona for v in session["votes"]):
+        die(f"'{a.persona}' already voted")
+    vote = {
+        "persona": a.persona,
+        "position": a.position.strip(),
+        "confidence": a.confidence,
+        "reason": a.reason,
+    }
+    session["votes"].append(vote)
+    session["status"] = "voting"
+    save_session(a.session_dir, session)
+    return {"ok": True, "recorded": vote, "votes_total": len(session["votes"])}
+
+
+# ── tally: owner-weighted resolution (the decision math) ────────────────────
+def resolve(votes: list[dict], owner: str) -> dict:
+    """Resolve the vote through the owner's lens. Pure, deterministic.
+
+    weight(option) = sum of voter confidences for it. The owner is the deciding
+    vote / tie-breaker: the resolved option is the OWNER's position unless a
+    *single* non-owner option strictly dominates it (unique top, strictly
+    greater by > epsilon) — only then does the room override, and that override
+    is recorded. Otherwise (owner at/near the top, or a tie at the top) the
+    owner's position wins.
+    """
+    owner_votes = [v for v in votes if v["persona"] == owner]
+    if not owner_votes:
+        die("owner has not voted — cannot resolve")
+    owner_pos = owner_votes[0]["position"]
+
+    weights: dict[str, float] = {}
+    for v in votes:
+        weights[v["position"]] = round(weights.get(v["position"], 0.0) + v["confidence"], 6)
+
+    top_weight = max(weights.values())
+    at_top = [opt for opt, w in weights.items() if abs(w - top_weight) <= TIE_EPSILON]
+
+    owner_overridden = False
+    if owner_pos in at_top:
+        resolved = owner_pos
+    elif len(at_top) == 1 and (top_weight - weights[owner_pos]) > TIE_EPSILON:
+        resolved = at_top[0]            # room decisively overrides the owner
+        owner_overridden = True
+    else:
+        resolved = owner_pos            # owner breaks the tie toward its own call
+
+    dissents = [
+        {"persona": v["persona"], "position": v["position"], "reason": v["reason"]}
+        for v in votes if v["position"] != resolved
+    ]
+    return {
+        "resolved": resolved,
+        "owner_position": owner_pos,
+        "owner_overridden": owner_overridden,
+        "weights": weights,
+        "top_weight": top_weight,
+        "dissents": dissents,
+    }
+
+
+def cmd_tally(a: argparse.Namespace) -> dict:
+    session = load_session(a.session_dir)
+    if not session["votes"]:
+        die("no votes recorded yet")
+    res = resolve(session["votes"], session["owner"])
+    missing = [p for p in session["personas"]
+               if p not in {v["persona"] for v in session["votes"]}]
+    return {"ok": True, "owner": session["owner"], "did_not_vote": missing, **res}
+
+
+# ── fork-check: owner-level escalation policy ──────────────────────────────
+def fork_check(flags: list[str]) -> dict:
+    recognized = [f for f in flags if f in OWNER_FORK_FLAGS]
+    unknown = [f for f in flags if f not in OWNER_FORK_FLAGS]
+    return {
+        "escalate": bool(recognized),
+        "reasons": [f"{f}: {OWNER_FORK_FLAGS[f]}" for f in recognized],
+        "flags": recognized,
+        "unknown_flags": unknown,
+    }
+
+
+def cmd_fork_check(a: argparse.Namespace) -> dict:
+    fc = fork_check(parse_list(a.flags) if a.flags else [])
+    return {"ok": True, "decision": a.decision, **fc}
+
+
+# ── verdict: assemble + write ───────────────────────────────────────────────
+def _condensed_trail(session: dict) -> list[dict]:
+    out = []
+    order = {p: i for i, p in enumerate(session["speaking_order"])}
+    by_round: dict[int, list[dict]] = {}
+    for t in session["turns"]:
+        by_round.setdefault(t["round"], []).append(t)
+    for r in sorted(by_round):
+        turns = sorted(by_round[r], key=lambda t: order.get(t["persona"], 99))
+        out.append({
+            "round": r,
+            "turns": [{"persona": t["persona"], "stance": t["stance"],
+                       "why": t["why"], "root": t["root"]} for t in turns],
+        })
+    return out
+
+
+def _verdict_md(v: dict) -> str:
+    lines = [
+        f"# Verdict — {v['question']}",
+        "",
+        f"**Decision:** {v['decision']}",
+        f"**Resolved option:** {v['tally']['resolved']}  ",
+        f"**Owner (decider):** {v['owner']}"
+        + ("  · _room overrode the owner_" if v["tally"]["owner_overridden"] else ""),
+        f"**Status:** {v['status']}",
+        "",
+    ]
+    if v["escalation"]["required"]:
+        lines += ["> ⚠️ **OWNER-LEVEL FORK — escalate to the real owner. Do not act.**"]
+        lines += [f"> - {r}" for r in v["escalation"]["reasons"]] + [""]
+    lines += ["## Vote tally", ""]
+    for opt, w in sorted(v["tally"]["weights"].items(), key=lambda kv: -kv[1]):
+        mark = " ← resolved" if opt == v["tally"]["resolved"] else ""
+        lines.append(f"- **{opt}** — weight {w}{mark}")
+    lines += ["", "## Dissents", ""]
+    if v["tally"]["dissents"]:
+        for d in v["tally"]["dissents"]:
+            lines.append(f"- **{d['persona']}** ({d['position']}): {d['reason']}")
+    else:
+        lines.append("- none — the room aligned")
+    lines += ["", "## 5-whys rationale trail", ""]
+    for rnd in v["rationale_trail"]:
+        lines.append(f"### Round {rnd['round']}")
+        for t in rnd["turns"]:
+            lines.append(f"- **{t['persona']}** [{t['stance']}]: "
+                         + " → ".join(t["why"]) + f"  _(root: {t['root']})_")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def cmd_verdict(a: argparse.Namespace) -> dict:
+    session = load_session(a.session_dir)
+    if not session["votes"]:
+        die("no votes recorded — run vote before verdict")
+    tally = resolve(session["votes"], session["owner"])
+    fc = fork_check(parse_list(a.flags) if a.flags else [])
+
+    verdict = {
+        "session_id": session["session_id"],
+        "question": session["question"],
+        "owner": session["owner"],
+        "personas": session["personas"],
+        "rounds": session["rounds"],
+        "decision": a.decision.strip() or tally["resolved"],
+        "summary": a.summary,
+        "tally": tally,
+        "votes": session["votes"],
+        "rationale_trail": _condensed_trail(session),
+        "escalation": {
+            "required": fc["escalate"],
+            "reasons": fc["reasons"],
+            "flags": fc["flags"],
+        },
+        "status": "escalated" if fc["escalate"] else "decided",
+    }
+    sdir = Path(a.session_dir)
+    (sdir / "verdict.json").write_text(json.dumps(verdict, indent=2))
+    (sdir / "verdict.md").write_text(_verdict_md(verdict))
+
+    session["status"] = verdict["status"]
+    save_session(a.session_dir, session)
+    return {
+        "ok": True,
+        "status": verdict["status"],
+        "resolved": tally["resolved"],
+        "owner_overridden": tally["owner_overridden"],
+        "escalation": verdict["escalation"],
+        "verdict_json": str(sdir / "verdict.json"),
+        "verdict_md": str(sdir / "verdict.md"),
+        "actionable": verdict["status"] == "decided",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="autonomous_huddle")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -216,8 +406,33 @@ def main(argv: list[str] | None = None) -> int:
     pt = sub.add_parser("trail")
     pt.add_argument("session_dir")
 
+    pv = sub.add_parser("vote")
+    pv.add_argument("session_dir")
+    pv.add_argument("--persona", required=True)
+    pv.add_argument("--position", required=True)
+    pv.add_argument("--confidence", type=float, required=True)
+    pv.add_argument("--reason", default="")
+
+    pta = sub.add_parser("tally")
+    pta.add_argument("session_dir")
+
+    pf = sub.add_parser("fork-check")
+    pf.add_argument("session_dir")
+    pf.add_argument("--decision", default="")
+    pf.add_argument("--flags", default="")
+
+    pvd = sub.add_parser("verdict")
+    pvd.add_argument("session_dir")
+    pvd.add_argument("--decision", default="")
+    pvd.add_argument("--flags", default="")
+    pvd.add_argument("--summary", default="")
+
     args = p.parse_args(argv)
-    handlers = {"init": cmd_init, "record-turn": cmd_record_turn, "trail": cmd_trail}
+    handlers = {
+        "init": cmd_init, "record-turn": cmd_record_turn, "trail": cmd_trail,
+        "vote": cmd_vote, "tally": cmd_tally, "fork-check": cmd_fork_check,
+        "verdict": cmd_verdict,
+    }
     out = handlers[args.cmd](args)
     print(json.dumps(out, indent=2))
     return 0
