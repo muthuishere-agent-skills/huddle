@@ -262,6 +262,61 @@ def test_verdict_decided_and_escalated(home: Path) -> None:
     print("  [ok] verdict — decided=actionable w/ trail+dissents; escalated=staged, not actionable")
 
 
+# ── S4: headless skill wiring (structural lint) ────────────────────────────
+def test_skill_wiring() -> None:
+    routing = (ROOT / "references" / "activation-routing.xml").read_text()
+    assert 'route id="autonomous-decide"' in routing, "autonomous-decide route missing"
+    assert 'mode="autonomous"' in routing, "autonomous mode missing"
+    assert "step-autonomous-decider.md" in routing, "route must reference the step file"
+    # the headless override must be scoped to this mode, and the interactive
+    # "user drives" guarantee must still be present elsewhere
+    assert "User drives" in routing or "User drives —" in routing, "interactive guarantee lost"
+    assert "suspended" in routing.lower(), "must state the user-drives rules are suspended only in autonomous mode"
+
+    step = ROOT / "references" / "steps" / "step-autonomous-decider.md"
+    assert step.exists(), "step-autonomous-decider.md missing"
+    sbody = step.read_text()
+    for cmd in ("init", "record-turn", "vote", "tally", "verdict"):
+        assert f"autonomous_huddle.py {cmd}" in sbody, f"step must drive `{cmd}`"
+    assert "escalated" in sbody and "owner-level fork" in sbody.lower(), \
+        "step must cover the escalation outcome"
+
+    skill = (ROOT / "SKILL.md").read_text()
+    assert "autonomous huddle" in skill.lower(), "SKILL trigger for autonomous mode missing"
+    assert "Interactive (human-decides) is the default" in skill, "default-mode note missing"
+
+    spec = ROOT / "docs" / "huddle-autonomous-decider.md"
+    assert spec.exists(), "design spec missing"
+    print("  [ok] wiring — route + step + SKILL triggers + spec present; interactive mode preserved")
+
+
+def test_end_to_end_headless() -> None:
+    """Drive the whole flow through the script exactly as the step file would."""
+    tmp = Path(tempfile.mkdtemp(prefix="huddle-e2e-flow-"))
+    try:
+        hud = str(tmp / "hud")
+        out = run([
+            "init", hud, "--question", "Refactor the planner into its own module?",
+            "--owner", "arasan", "--personas", "arasan,suren,shaama,nina", "--rounds", "3",
+            "--session-id", "20260615T140000",
+        ])
+        sdir = out["session_dir"]
+        for r in (1, 2, 3):
+            for pid in ("suren", "shaama", "nina", "arasan"):
+                run(["record-turn", sdir, "--round", str(r), "--persona", pid,
+                     "--why", ";".join(["w"] * (2 + r)), "--stance", "yes-refactor"])
+        for pid, conf in (("suren", 0.8), ("shaama", 0.7), ("nina", 0.5), ("arasan", 0.9)):
+            run(["vote", sdir, "--persona", pid, "--position", "yes-refactor",
+                 "--confidence", str(conf), "--reason", "cleaner boundary"])
+        v = run(["verdict", sdir, "--decision", "Refactor planner into its own module",
+                 "--summary", "reversible internal cleanup"])
+        assert v["status"] == "decided" and v["actionable"] is True, "internal refactor should be headless-actionable"
+        assert Path(v["verdict_json"]).exists() and Path(v["verdict_md"]).exists()
+        print("  [ok] end-to-end — init->rounds->vote->verdict yields an actionable headless verdict")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="huddle-auton-"))
     try:
@@ -280,6 +335,8 @@ def main() -> int:
         test_tally_guards(home)
         test_fork_check(home)
         test_verdict_decided_and_escalated(home)
+        test_skill_wiring()
+        test_end_to_end_headless()
         print("\nautonomous ok")
         return 0
     except AssertionError as exc:

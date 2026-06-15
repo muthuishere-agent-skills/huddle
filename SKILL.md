@@ -8,12 +8,22 @@ description: >
   think through this", "I'm stuck on X let's discuss", "resume the huddle", "continue our discussion",
   "what did we decide", "get me a spec", "summarise the huddle", "what are the action items".
   Also trigger when the user seems blocked, frustrated, or facing a decision with multiple tradeoffs —
-  even if they don't explicitly ask for a huddle.
+  even if they don't explicitly ask for a huddle. For HEADLESS, self-deciding huddles (no human in the loop),
+  also trigger on: "autonomous huddle", "decide this without me", "decide this headless", "let the huddle decide and act",
+  "convene the deciders", "run the autonomous decider", "fleet huddle", "owner-decided huddle", "spec-first loop decision".
 ---
 
 # Huddle
 
 Use this skill as the repo's decision huddle.
+
+It runs in two modes. **Interactive (human-decides) is the default** — personas
+surface perspectives, then the skill stops and waits for the user to decide.
+**Autonomous Decider Mode** is opt-in and headless: a room deliberates with
+5-whys across rounds and a designated OWNER persona resolves a weighted vote into
+an actionable verdict with no human stop (owner-level forks still escalate to the
+real owner). See `docs/huddle-autonomous-decider.md` and
+`references/steps/step-autonomous-decider.md`.
 
 For any topic raised, Claude surfaces relevant perspectives from a team of specialists (Architecture, Engineering, Security, Product, Design, Testing, Test Architecture, Analysis, Documentation, Strategy, Prioritization, Validation, Vision, Presentation, Narrative, Data, Trend Scanning, Spec Creation) — short, opinionated, grounded in the repo — then stops and waits for the user to decide and move forward.
 
