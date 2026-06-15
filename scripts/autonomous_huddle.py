@@ -129,6 +129,71 @@ def cmd_init(a: argparse.Namespace) -> dict:
     }
 
 
+# ── record-turn (5-whys) ───────────────────────────────────────────────────
+def cmd_record_turn(a: argparse.Namespace) -> dict:
+    session = load_session(a.session_dir)
+    if a.persona not in session["personas"]:
+        die(f"persona '{a.persona}' is not in this room: {session['personas']}")
+    if not (1 <= a.round <= session["rounds"]):
+        die(f"round must be 1..{session['rounds']}, got {a.round}")
+
+    whys = [w.strip() for w in a.why.split(";") if w.strip()]
+    if len(whys) < MIN_WHYS:
+        die(f"5-whys turn needs >= {MIN_WHYS} deepening steps (why -> why -> root), got {len(whys)}")
+
+    # round monotonicity: a persona's depth must not go shallower than its own
+    # previous round — each round digs deeper, never a shallower re-take.
+    prev = [t for t in session["turns"] if t["persona"] == a.persona and t["round"] < a.round]
+    if prev:
+        deepest = max(t["depth"] for t in prev)
+        if len(whys) < deepest:
+            die(
+                f"round {a.round} for '{a.persona}' is shallower "
+                f"({len(whys)}) than an earlier round ({deepest}); each round must deepen"
+            )
+    # one turn per persona per round
+    if any(t["persona"] == a.persona and t["round"] == a.round for t in session["turns"]):
+        die(f"'{a.persona}' already spoke in round {a.round}")
+
+    turn = {
+        "round": a.round,
+        "persona": a.persona,
+        "stance": a.stance,
+        "why": whys,
+        "depth": len(whys),
+        "root": whys[-1],
+    }
+    session["turns"].append(turn)
+    session["status"] = "deliberating"
+    save_session(a.session_dir, session)
+    return {"ok": True, "recorded": turn, "turns_total": len(session["turns"])}
+
+
+def cmd_trail(a: argparse.Namespace) -> dict:
+    session = load_session(a.session_dir)
+    by_round: dict[int, list[dict]] = {}
+    for t in session["turns"]:
+        by_round.setdefault(t["round"], []).append(t)
+    trail = []
+    for r in sorted(by_round):
+        # preserve speaking order within the round
+        order = {p: i for i, p in enumerate(session["speaking_order"])}
+        turns = sorted(by_round[r], key=lambda t: order.get(t["persona"], 99))
+        trail.append({"round": r, "turns": turns})
+    complete = all(
+        len([t for t in session["turns"] if t["round"] == r]) == len(session["personas"])
+        for r in range(1, session["rounds"] + 1)
+    )
+    return {
+        "ok": True,
+        "question": session["question"],
+        "rounds": session["rounds"],
+        "owner": session["owner"],
+        "trail": trail,
+        "deliberation_complete": complete,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="autonomous_huddle")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -141,8 +206,18 @@ def main(argv: list[str] | None = None) -> int:
     pi.add_argument("--rounds", type=int, default=MIN_ROUNDS)
     pi.add_argument("--session-id", dest="session_id", default="")
 
+    pr = sub.add_parser("record-turn")
+    pr.add_argument("session_dir")
+    pr.add_argument("--round", type=int, required=True)
+    pr.add_argument("--persona", required=True)
+    pr.add_argument("--why", required=True, help="semicolon-separated deepening steps")
+    pr.add_argument("--stance", default="")
+
+    pt = sub.add_parser("trail")
+    pt.add_argument("session_dir")
+
     args = p.parse_args(argv)
-    handlers = {"init": cmd_init}
+    handlers = {"init": cmd_init, "record-turn": cmd_record_turn, "trail": cmd_trail}
     out = handlers[args.cmd](args)
     print(json.dumps(out, indent=2))
     return 0

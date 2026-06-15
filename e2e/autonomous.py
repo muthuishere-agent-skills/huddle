@@ -83,7 +83,65 @@ def test_owner_persona_assets() -> None:
     print("  [ok] assets — arasan persona + roster owner=\"true\" present")
 
 
-TESTS_S1 = [test_init_happy, test_init_rejections, test_owner_persona_assets]
+# ── S2: 5-whys rounds + rationale trail ────────────────────────────────────
+def _init_room(home: Path, sid: str = "s2") -> str:
+    out = run([
+        "init", str(home / "hud-s2"),
+        "--question", "Use a queue table or a broker for fan-out?",
+        "--owner", "arasan", "--personas", "arasan,shaama,nina", "--rounds", "3",
+        "--session-id", sid,
+    ])
+    return out["session_dir"]
+
+
+def test_record_turn_depth(home: Path) -> None:
+    sdir = _init_room(home, "depth")
+    # shallow turn (< 3 whys) is rejected
+    run(["record-turn", sdir, "--round", "1", "--persona", "shaama",
+         "--why", "it's simpler", "--stance", "queue table"], expect_ok=False)
+    # a proper 5-whys turn is accepted
+    out = run(["record-turn", sdir, "--round", "1", "--persona", "shaama",
+               "--why", "queue table is simpler;no broker to run;fewer failure modes",
+               "--stance", "queue table"])
+    assert out["recorded"]["depth"] == 3
+    assert out["recorded"]["root"] == "fewer failure modes"
+    # same persona/round twice is rejected
+    run(["record-turn", sdir, "--round", "1", "--persona", "shaama",
+         "--why", "a;b;c"], expect_ok=False)
+    # unknown persona rejected
+    run(["record-turn", sdir, "--round", "1", "--persona", "ghost",
+         "--why", "a;b;c"], expect_ok=False)
+    print("  [ok] record-turn — depth floor, no double-speak, room membership")
+
+
+def test_round_monotonicity(home: Path) -> None:
+    sdir = _init_room(home, "mono")
+    run(["record-turn", sdir, "--round", "1", "--persona", "nina",
+         "--why", "a;b;c;d", "--stance", "broker"])
+    # round 2 shallower than round 1 (4 -> 3) is rejected: rounds must deepen
+    run(["record-turn", sdir, "--round", "2", "--persona", "nina",
+         "--why", "a;b;c", "--stance", "broker"], expect_ok=False)
+    # round 2 at least as deep is fine
+    out = run(["record-turn", sdir, "--round", "2", "--persona", "nina",
+               "--why", "a;b;c;d;e", "--stance", "broker"])
+    assert out["recorded"]["depth"] == 5
+    print("  [ok] record-turn — each round must deepen, never go shallower")
+
+
+def test_trail(home: Path) -> None:
+    sdir = _init_room(home, "trail")
+    personas = ["shaama", "nina", "arasan"]
+    for rnd in (1, 2, 3):
+        for pid in personas:
+            run(["record-turn", sdir, "--round", str(rnd), "--persona", pid,
+                 "--why", ";".join(["why"] * (2 + rnd)), "--stance", "x"])
+    out = run(["trail", sdir])
+    assert len(out["trail"]) == 3, "expected 3 rounds in trail"
+    assert out["deliberation_complete"] is True, "all personas spoke every round"
+    # speaking order within a round puts the owner last
+    r1 = out["trail"][0]["turns"]
+    assert r1[-1]["persona"] == "arasan", "owner should be last in the round trail"
+    print("  [ok] trail — grouped by round, owner-last order, completeness flag")
 
 
 def main() -> int:
@@ -95,6 +153,9 @@ def main() -> int:
         test_init_happy(home)
         test_init_rejections(home)
         test_owner_persona_assets()
+        test_record_turn_depth(home)
+        test_round_monotonicity(home)
+        test_trail(home)
         print("\nautonomous ok")
         return 0
     except AssertionError as exc:
