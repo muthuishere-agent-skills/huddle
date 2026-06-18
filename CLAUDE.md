@@ -38,6 +38,7 @@ e2e/run.py                       # Smoke tests
 - **`activation-routing.xml`** is the central policy file. It defines modes (discussion, planning, verification, research, spec-review, wrap-up), flow-control rules, and disambiguation logic. Changes to huddle behavior almost always start here.
 - **Steps execute in order** defined by `workflow.md`. Steps never skip; they stop and report on failure.
 - **Personas are selected per-topic** (small room by default). The roster is in `persona-roster.xml`; full persona behavior is in individual markdown files under `references/personas/`.
+- **Two modes: interactive (default) and autonomous (headless).** Interactive is human-decides — the skill stops and waits. Autonomous Decider Mode (`route id="autonomous-decide"`, `step-autonomous-decider.md`) is the only mode that decides without a human: a room runs 5-whys across rounds and one OWNER persona (`arasan`, roster `owner="true"`) resolves a weighted vote into a verdict. The "user drives" rules are suspended **only** inside that route. Owner-level forks (launch/spend/irreversible/legal/security/scope) still escalate to the real owner. The decision math + session structure live in `scripts/autonomous_huddle.py`; the persona reasoning is produced by the agent.
 
 ## Scripts
 
@@ -53,14 +54,16 @@ All scripts are Python 3, stdlib-only, and output JSON to stdout.
 | `config_helper.py` | `{PYTHON_BIN} scripts/config_helper.py read\|get\|set\|bootstrap ...` | Per-repo config CRUD at `~/.config/muthuishere-agent-skills/{reponame}/config.json` |
 | `repo_context.py` | `{PYTHON_BIN} scripts/repo_context.py snapshot` | Gathers repo context (git state, PRs, remote info); supports non-git local-folder mode |
 | `migrate.py` | `{PYTHON_BIN} scripts/migrate.py` | One-time migration from legacy `~/config/muthuishere-agent-skills/` to `~/.config/muthuishere-agent-skills/`. Spawned detached by `global_state.py` only when the new root doesn't yet exist. Idempotent; never overwrites existing targets. |
+| `autonomous_huddle.py` | `{PYTHON_BIN} scripts/autonomous_huddle.py init\|record-turn\|trail\|vote\|tally\|fork-check\|verdict ...` | Deterministic substrate for **Autonomous Decider Mode** (headless huddle). Manages the session manifest, enforces 5-whys depth + round monotonicity, resolves the owner-weighted vote (owner is the deciding vote / tie-breaker; a decisively-dominant room can override and it's recorded), applies the owner-level-fork escalation policy, and writes `verdict.json` + `verdict.md`. No LLM calls; the agent supplies the reasoning, the script owns the structure and the decision math. See `docs/huddle-autonomous-decider.md`. |
 
 ## Running Tests
 
 ```bash
-python3 e2e/run.py
+python3 e2e/run.py          # preflight scripts, synced personas, migrate
+python3 e2e/autonomous.py   # Autonomous Decider substrate (autonomous_huddle.py)
 ```
 
-This smoke-tests the three preflight scripts (`global_state`, `project_state snapshot`, `session_state`), the externally-synced persona/memory scans (`synced_assets`), and the one-time `migrate.py` flow. Uses a temp `$HOME` so it won't touch real config.
+`e2e/run.py` smoke-tests the three preflight scripts (`global_state`, `project_state snapshot`, `session_state`), the externally-synced persona/memory scans (`synced_assets`), and the one-time `migrate.py` flow. `e2e/autonomous.py` covers the autonomous decider substrate: init validation, 5-whys depth + round monotonicity, owner-weighted tally (tie-break / room-override / dissents), fork-check escalation, and full verdict assembly (decided vs escalated). Both use a temp `$HOME` so they won't touch real config.
 
 ## State Storage Layout
 
